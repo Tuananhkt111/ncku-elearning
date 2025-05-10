@@ -65,7 +65,12 @@ export async function POST(req: NextRequest) {
     const imageUrl = `/uploads/${uniqueFilename}`
     return NextResponse.json({ url: imageUrl }, { headers: corsHeaders })
   } catch (error) {
-    console.error('Upload error:', error)
+    console.error('Upload error details:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      uploadDir: path.join(process.cwd(), 'public', 'uploads'),
+      cwd: process.cwd()
+    });
     return NextResponse.json(
       { error: 'Failed to upload file. Please try again.' },
       { status: 500, headers: corsHeaders }
