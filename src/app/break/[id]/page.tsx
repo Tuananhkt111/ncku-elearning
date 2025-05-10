@@ -19,6 +19,7 @@ import {
   RadioGroup,
   Stack,
   Divider,
+  useToast,
 } from '@chakra-ui/react'
 import { useSessionStore } from '@/lib/stores/sessionStore'
 import { useQuestionStore } from '@/lib/stores/questionStore'
@@ -26,6 +27,8 @@ import { getSession } from '@/lib/api'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
 import type { EvaluationQuestion } from '@/types/evaluation'
+import { UserID } from '@/components/UserID'
+import { useUserStore } from '@/lib/stores/userStore'
 
 export default function BreakPage() {
   const params = useParams()
@@ -37,12 +40,16 @@ export default function BreakPage() {
   const [sessionScores, setSessionScores] = useState<boolean[]>([])
   const [totalQuestions, setTotalQuestions] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [hasAnswersSaved, setHasAnswersSaved] = useState(false)
   const [evaluationSetup, setEvaluationSetup] = useState<EvaluationQuestion | null>(null)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({})
   
   const { getSessionScores, setTimeLeft: setStoreTimeLeft } = useSessionStore()
+  const { userId } = useUserStore()
   const questionStore = useQuestionStore()
   const supabase = createClientComponentClient<Database>()
+  const toast = useToast()
 
   useEffect(() => {
     const loadData = async () => {
@@ -96,14 +103,66 @@ export default function BreakPage() {
 
   useEffect(() => {
     if (timeLeft == 0) {
-      // Update store before navigation
-      setStoreTimeLeft(sessionId, 0)
-      // Navigate to next session when timer ends
-      if (sessionId < 3) {
-        router.push(`/session/${sessionId + 1}`)
-      } else {
-        router.push('/result')
+      const saveAndNavigate = async () => {
+        try {
+          if (hasAnswersSaved) {
+            // If answers were already saved by clicking Done, just navigate
+            if (sessionId < 3) {
+              router.push(`/session/${sessionId + 1}`)
+            } else {
+              router.push('/result')
+            }
+            return
+          }
+
+          if (!userId) {
+            throw new Error('User ID not found')
+          }
+
+          // Create evaluation answer record for timeout
+          const { data: evaluationAnswer, error: evaluationError } = await supabase
+            .from('evaluation_answers')
+            .insert({
+              user_id: userId,
+              session_id: sessionId,
+              completion_type: 'timeout'
+            })
+            .select()
+            .single()
+
+          if (evaluationError || !evaluationAnswer) {
+            throw evaluationError || new Error('Failed to create evaluation answer')
+          }
+
+          // Create evaluation answer details
+          const detailPromises = Object.entries(selectedAnswers).map(([variableId, answerId]) => {
+            return supabase
+              .from('evaluation_answer_details')
+              .insert({
+                evaluation_answer_id: evaluationAnswer.id,
+                evaluation_variable_id: variableId,
+                evaluation_suggested_answer_id: answerId
+              })
+          })
+
+          await Promise.all(detailPromises)
+          setHasAnswersSaved(true)
+        } catch (error) {
+          console.error('Error saving timeout evaluation answers:', error)
+        }
+
+        // Update store before navigation
+        setStoreTimeLeft(sessionId, 0)
+        
+        // Navigate to next session when timer ends
+        if (sessionId < 3) {
+          router.push(`/session/${sessionId + 1}`)
+        } else {
+          router.push('/result')
+        }
       }
+
+      saveAndNavigate()
       return
     }
 
@@ -117,12 +176,74 @@ export default function BreakPage() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [timeLeft, sessionId, router, setStoreTimeLeft])
+  }, [timeLeft, sessionId, router, setStoreTimeLeft, userId, supabase, selectedAnswers, hasAnswersSaved])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const handleDone = async () => {
+    try {
+      if (hasAnswersSaved) return
+      setIsSaving(true)
+
+      if (!userId) {
+        throw new Error('User ID not found')
+      }
+
+      // Create evaluation answer record
+      const { data: evaluationAnswer, error: evaluationError } = await supabase
+        .from('evaluation_answers')
+        .insert({
+          user_id: userId,
+          session_id: sessionId,
+          completion_type: 'active'
+        })
+        .select()
+        .single()
+
+      if (evaluationError || !evaluationAnswer) {
+        throw evaluationError || new Error('Failed to create evaluation answer')
+      }
+
+      // Create evaluation answer details
+      const detailPromises = Object.entries(selectedAnswers).map(([variableId, answerId]) => {
+        return supabase
+          .from('evaluation_answer_details')
+          .insert({
+            evaluation_answer_id: evaluationAnswer.id,
+            evaluation_variable_id: variableId,
+            evaluation_suggested_answer_id: answerId
+          })
+      })
+
+      await Promise.all(detailPromises)
+      setHasAnswersSaved(true)
+
+      // Stop timer and navigate
+      setTimeLeft(0)
+      setStoreTimeLeft(sessionId, 0)
+
+      // Navigate to next session or results
+      if (sessionId < 3) {
+        router.push(`/session/${sessionId + 1}`)
+      } else {
+        router.push('/result')
+      }
+    } catch (error) {
+      console.error('Error saving evaluation answers:', error)
+      toast({
+        title: 'Error saving answers',
+        description: 'Please try again',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   if (isLoading) {
@@ -140,6 +261,7 @@ export default function BreakPage() {
 
   return (
     <Container maxW="container.md" py={10}>
+      <UserID />
       <VStack spacing={8}>
         <Heading>Session {sessionId} Complete!</Heading>
         
@@ -202,6 +324,18 @@ export default function BreakPage() {
                 </RadioGroup>
               </Box>
             ))}
+
+            <Button
+              colorScheme="green"
+              size="lg"
+              w="full"
+              mt={4}
+              onClick={handleDone}
+              isLoading={isSaving}
+              isDisabled={Object.keys(selectedAnswers).length !== evaluationSetup.evaluation_variables?.length}
+            >
+              Done
+            </Button>
           </VStack>
         )}
 
@@ -209,7 +343,7 @@ export default function BreakPage() {
           Take a moment to rest. The next session will start automatically.
         </Text>
 
-        {sessionId === 3 && (
+        {sessionId === 3 && timeLeft === 0 && (
           <Button
             colorScheme="blue"
             onClick={() => router.push('/result')}

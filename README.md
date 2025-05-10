@@ -107,3 +107,59 @@ An interactive learning platform that allows users to participate in a 3-part te
 
 5. Run the development server:
    ```
+
+## Database Setup
+
+### Users Table
+```sql
+create table users (
+  id uuid default uuid_generate_v4() primary key,
+  user_id text not null unique,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable RLS
+alter table users enable row level security;
+
+-- Create policies
+create policy "Enable read access for all users" on users for
+    select using (true);
+
+create policy "Enable insert access for all users" on users for
+    insert with check (true);
+
+-- Evaluation Answer table
+create table evaluation_answers (
+  id uuid default uuid_generate_v4() primary key,
+  user_id text not null references users(user_id),
+  session_id integer not null references sessions(id),
+  completion_type text not null check (completion_type in ('active', 'timeout')),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Evaluation Answer Details table
+create table evaluation_answer_details (
+  id uuid default uuid_generate_v4() primary key,
+  evaluation_answer_id uuid not null references evaluation_answers(id) on delete cascade,
+  evaluation_variable_id uuid not null references evaluation_variables(id),
+  evaluation_suggested_answer_id uuid not null references evaluation_suggested_answers(id),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(evaluation_answer_id, evaluation_variable_id)
+);
+
+-- Enable RLS
+alter table evaluation_answers enable row level security;
+alter table evaluation_answer_details enable row level security;
+
+-- Create policies
+create policy "Enable read access for all users" on evaluation_answers for
+    select using (true);
+
+create policy "Enable insert access for all users" on evaluation_answers for
+    insert with check (true);
+
+create policy "Enable read access for all users" on evaluation_answer_details for
+    select using (true);
+
+create policy "Enable insert access for all users" on evaluation_answer_details for
+    insert with check (true);

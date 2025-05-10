@@ -21,6 +21,7 @@ import { useSessionStore } from '@/lib/stores/sessionStore'
 import { useQuestionStore, Question } from '@/lib/stores/questionStore'
 import { Session } from '@/types'
 import { getSession } from '@/lib/api'
+import { UserID } from '@/components/UserID'
 
 export default function SessionPage() {
   const params = useParams()
@@ -105,6 +106,7 @@ export default function SessionPage() {
     // Don't start timer if time is already 0
     if (timeLeft <= 0) {
       console.log('Timer not starting because timeLeft is 0')
+      handleSubmitAll(true)
       return
     }
 
@@ -139,7 +141,7 @@ export default function SessionPage() {
         timerRef.current = null
       }
     }
-  }, [sessionId, isLoading, error, sessionData, handleSubmitAll, setStoreTimeLeft])
+  }, [isLoading, error, sessionData, handleSubmitAll, sessionId, setStoreTimeLeft, timeLeft])
 
   // Load session data and questions
   useEffect(() => {
@@ -312,6 +314,7 @@ export default function SessionPage() {
 
   return (
     <Container maxW="container.md" py={10}>
+      <UserID />
       <VStack spacing={6}>
         <Box w="full">
           <Text fontSize="xl" fontWeight="bold" mb={2}>

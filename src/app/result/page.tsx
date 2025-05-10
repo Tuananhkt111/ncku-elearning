@@ -23,6 +23,7 @@ import {
   Spinner,
 } from '@chakra-ui/react'
 import { useSessionStore } from '@/lib/stores/sessionStore'
+import { UserID } from '@/components/UserID'
 
 interface ResultData {
   scores: boolean[][]
@@ -84,6 +85,7 @@ export default function ResultPage() {
 
   return (
     <Container maxW="container.md" py={10}>
+      <UserID />
       <VStack spacing={8}>
         <Heading>Test Results</Heading>
 
