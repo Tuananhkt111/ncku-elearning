@@ -64,6 +64,32 @@ An interactive learning platform that allows users to participate in a 3-part te
        created_at timestamp with time zone default timezone('utc'::text, now()) not null
      );
 
+     -- Evaluation Questions table
+     create table evaluation_questions (
+       id uuid default uuid_generate_v4() primary key,
+       description text not null,
+       created_at timestamp with time zone default timezone('utc'::text, now()) not null
+     );
+
+     -- Evaluation Variables table
+     create table evaluation_variables (
+       id uuid default uuid_generate_v4() primary key,
+       question_id uuid not null references evaluation_questions(id) on delete cascade,
+       variable_name text not null,
+       created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+       unique(question_id, variable_name)
+     );
+
+     -- Evaluation Suggested Answers table
+     create table evaluation_suggested_answers (
+       id uuid default uuid_generate_v4() primary key,
+       variable_id uuid not null references evaluation_variables(id) on delete cascade,
+       answer_text text not null,
+       order_number integer not null,
+       created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+       unique(variable_id, order_number)
+     );
+
      -- Insert default sessions
      insert into sessions (
        id,

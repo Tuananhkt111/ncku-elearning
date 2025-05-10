@@ -8,7 +8,7 @@ import {
   Text,
   Flex,
 } from '@chakra-ui/react';
-import { FiSettings, FiHelpCircle } from 'react-icons/fi';
+import { FiSettings, FiHelpCircle, FiClipboard } from 'react-icons/fi';
 import NextLink from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -22,6 +22,11 @@ const NAV_ITEMS = [
     label: 'Questions',
     href: '/admin/questions',
     icon: FiHelpCircle,
+  },
+  {
+    label: 'Evaluation',
+    href: '/admin/evaluation',
+    icon: FiClipboard,
   },
 ];
 
