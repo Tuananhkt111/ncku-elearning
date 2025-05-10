@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import path from 'path'
 
+// Helper function to add CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders })
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
@@ -10,7 +22,7 @@ export async function POST(req: NextRequest) {
     if (!file) {
       return NextResponse.json(
         { error: 'No file uploaded' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       )
     }
 
@@ -18,7 +30,7 @@ export async function POST(req: NextRequest) {
     if (!file.type.startsWith('image/')) {
       return NextResponse.json(
         { error: 'Only image files are allowed' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       )
     }
 
@@ -27,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (file.size > maxSize) {
       return NextResponse.json(
         { error: 'File size must be less than 5MB' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       )
     }
 
@@ -51,12 +63,12 @@ export async function POST(req: NextRequest) {
 
     // Return the public URL
     const imageUrl = `/uploads/${uniqueFilename}`
-    return NextResponse.json({ url: imageUrl })
+    return NextResponse.json({ url: imageUrl }, { headers: corsHeaders })
   } catch (error) {
     console.error('Upload error:', error)
     return NextResponse.json(
       { error: 'Failed to upload file. Please try again.' },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     )
   }
 } 
