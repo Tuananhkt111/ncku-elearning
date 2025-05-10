@@ -15,10 +15,17 @@ import {
   StatNumber,
   StatGroup,
   Spinner,
+  Radio,
+  RadioGroup,
+  Stack,
+  Divider,
 } from '@chakra-ui/react'
 import { useSessionStore } from '@/lib/stores/sessionStore'
 import { useQuestionStore } from '@/lib/stores/questionStore'
 import { getSession } from '@/lib/api'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import type { Database } from '@/types/supabase'
+import type { EvaluationQuestion } from '@/types/evaluation'
 
 export default function BreakPage() {
   const params = useParams()
@@ -30,9 +37,12 @@ export default function BreakPage() {
   const [sessionScores, setSessionScores] = useState<boolean[]>([])
   const [totalQuestions, setTotalQuestions] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [evaluationSetup, setEvaluationSetup] = useState<EvaluationQuestion | null>(null)
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({})
   
   const { getSessionScores, setTimeLeft: setStoreTimeLeft } = useSessionStore()
   const questionStore = useQuestionStore()
+  const supabase = createClientComponentClient<Database>()
 
   useEffect(() => {
     const loadData = async () => {
@@ -54,6 +64,27 @@ export default function BreakPage() {
         // Get scores for this session
         const scores = await getSessionScores(sessionId)
         setSessionScores(scores)
+
+        // Fetch evaluation setup
+        const { data: evaluationData, error: evaluationError } = await supabase
+          .from('evaluation_questions')
+          .select(`
+            *,
+            evaluation_variables:evaluation_variables (
+              *,
+              evaluation_suggested_answers:evaluation_suggested_answers (*)
+            )
+          `)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (evaluationError) {
+          console.error('Error fetching evaluation setup:', evaluationError)
+        } else {
+          setEvaluationSetup(evaluationData)
+        }
+
         setIsLoading(false)
       } catch (error) {
         console.error('Error loading data:', error)
@@ -61,7 +92,7 @@ export default function BreakPage() {
       }
     }
     loadData()
-  }, [sessionId, questionStore, getSessionScores, hasStarted])
+  }, [sessionId, questionStore, getSessionScores, hasStarted, supabase])
 
   useEffect(() => {
     if (timeLeft == 0) {
@@ -134,6 +165,45 @@ export default function BreakPage() {
             <StatNumber>{totalQuestions}/{totalQuestions}</StatNumber>
           </Stat>
         </StatGroup>
+
+        <Divider />
+
+        {evaluationSetup && (
+          <VStack spacing={6} align="stretch" w="full">
+            <Heading size="md">Evaluation Setup</Heading>
+            
+            <Text fontSize="lg" fontWeight="medium">
+              {evaluationSetup.description}
+            </Text>
+
+            {evaluationSetup.evaluation_variables?.map((variable) => (
+              <Box key={variable.id} p={4} borderWidth={1} borderRadius="md">
+                <Text fontSize="md" fontWeight="bold" mb={3}>
+                  {variable.variable_name}
+                </Text>
+                
+                <RadioGroup
+                  value={selectedAnswers[variable.id] || ''}
+                  onChange={(value) => setSelectedAnswers(prev => ({
+                    ...prev,
+                    [variable.id]: value
+                  }))}
+                >
+                  <Stack>
+                    {variable.evaluation_suggested_answers
+                      ?.sort((a, b) => a.order_number - b.order_number)
+                      .map((answer) => (
+                        <Radio key={answer.id} value={answer.id}>
+                          {answer.answer_text}
+                        </Radio>
+                      ))
+                    }
+                  </Stack>
+                </RadioGroup>
+              </Box>
+            ))}
+          </VStack>
+        )}
 
         <Text fontSize="lg" textAlign="center">
           Take a moment to rest. The next session will start automatically.
