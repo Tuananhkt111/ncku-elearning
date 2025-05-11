@@ -25,30 +25,37 @@ export function SessionInfo({ session }: SessionInfoProps) {
           <Text>Evaluation: {session.evaluation_minutes} minutes</Text>
         </Box>
 
-        {session.popup_start_time !== null && (
+        {session.popups && session.popups.length > 0 && (
           <>
             <Divider />
-            <Box>
-              <HStack mb={2}>
-                <Heading size="sm">Popup Information</Heading>
-                <Badge colorScheme="blue">
-                  Starts at {formatTime(session.popup_start_time)}
-                </Badge>
-                {session.popup_remind_time && (
-                  <Badge colorScheme="purple">
-                    Reminder at {formatTime(session.popup_remind_time)}
-                  </Badge>
-                )}
-              </HStack>
-              {session.popup_name && (
-                <Text fontWeight="medium">{session.popup_name}</Text>
-              )}
-              {session.popup_description && (
-                <Text color="gray.600">{session.popup_description}</Text>
-              )}
-              <Text fontSize="sm" color="gray.500" mt={1}>
-                Duration: {formatTime(session.popup_duration!)}
-              </Text>
+            <Box w="100%">
+              <Heading size="sm" mb={4}>Popups ({session.popups.length})</Heading>
+              <VStack spacing={4} align="stretch">
+                {session.popups.map((popup) => (
+                  <Box 
+                    key={popup.id} 
+                    p={4} 
+                    borderWidth={1} 
+                    borderRadius="md" 
+                    bg="gray.50"
+                  >
+                    <HStack mb={2} spacing={2}>
+                      <Badge colorScheme="blue">
+                        Starts at {formatTime(popup.start_time)}
+                      </Badge>
+                      <Badge colorScheme="green">
+                        Duration: {formatTime(popup.duration)}
+                      </Badge>
+                    </HStack>
+                    {popup.name && (
+                      <Text fontWeight="medium">{popup.name}</Text>
+                    )}
+                    {popup.description && (
+                      <Text color="gray.600" mt={1}>{popup.description}</Text>
+                    )}
+                  </Box>
+                ))}
+              </VStack>
             </Box>
           </>
         )}

@@ -1,14 +1,20 @@
+export interface Popup {
+  id: number;
+  session_id: number;
+  name: string;
+  description: string;
+  start_time: number; // seconds from session start
+  duration: number; // seconds
+  created_at: string;
+}
+
 export interface Session {
   id: number;
   description: string;
   duration_minutes: number;
   evaluation_minutes: number;
-  popup_name: string;
-  popup_description: string;
-  popup_start_time: number | null; // seconds from session start
-  popup_duration: number | null; // seconds
-  popup_remind_time: number | null; // seconds, when to show reminder
   created_at: string;
+  popups?: Popup[];
 }
 
 export interface Question {

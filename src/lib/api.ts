@@ -1,26 +1,43 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Session, Question, SessionWithQuestions } from '@/types';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = createClientComponentClient();
 
 // Session operations
 export async function getSessions(): Promise<Session[]> {
-  const { data, error } = await supabase
+  const { data: sessions, error } = await supabase
     .from('sessions')
-    .select('*')
+    .select(`
+      *,
+      popups (
+        id,
+        name,
+        description,
+        start_time,
+        duration,
+        created_at
+      )
+    `)
     .order('id');
-  
+
   if (error) throw error;
-  return data;
+  return sessions;
 }
 
 export async function getSession(id: number): Promise<Session | null> {
   const { data, error } = await supabase
     .from('sessions')
-    .select('*')
+    .select(`
+      *,
+      popups (
+        id,
+        name,
+        description,
+        start_time,
+        duration,
+        created_at
+      )
+    `)
     .eq('id', id)
     .single();
 
@@ -30,24 +47,59 @@ export async function getSession(id: number): Promise<Session | null> {
 
 export async function updateSession(
   id: number,
-  session: Partial<Omit<Session, 'id' | 'created_at'>>
-): Promise<Session> {
-  const { data, error } = await supabase
-    .from('sessions')
-    .update(session)
-    .eq('id', id)
-    .select()
-    .single();
+  data: Omit<Session, 'id' | 'created_at'>
+): Promise<void> {
+  const { popups, ...sessionData } = data;
 
-  if (error) throw error;
-  return data;
+  // Start a transaction
+  const { error: sessionError } = await supabase
+    .from('sessions')
+    .update(sessionData)
+    .eq('id', id);
+
+  if (sessionError) throw sessionError;
+
+  // Delete existing popups
+  const { error: deleteError } = await supabase
+    .from('popups')
+    .delete()
+    .eq('session_id', id);
+
+  if (deleteError) throw deleteError;
+
+  // Insert new popups if any
+  if (popups && popups.length > 0) {
+    const popupsToInsert = popups.map(popup => ({
+      session_id: id,
+      name: popup.name,
+      description: popup.description,
+      start_time: popup.start_time,
+      duration: popup.duration
+    }));
+
+    const { error: popupsError } = await supabase
+      .from('popups')
+      .insert(popupsToInsert);
+
+    if (popupsError) throw popupsError;
+  }
 }
 
 export async function getSessionWithQuestions(sessionId: number): Promise<SessionWithQuestions | null> {
-  // Get session details
+  // Get session details with popups
   const { data: session, error: sessionError } = await supabase
     .from('sessions')
-    .select('*')
+    .select(`
+      *,
+      popups (
+        id,
+        name,
+        description,
+        start_time,
+        duration,
+        created_at
+      )
+    `)
     .eq('id', sessionId)
     .single();
 

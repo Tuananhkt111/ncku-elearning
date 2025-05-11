@@ -50,7 +50,7 @@ interface UserTestAnswer {
   id: string
   user_id: string
   session_id: number
-  total_time_ms: number
+  total_time: number
   created_at: string
   user_test_answer_detail: UserTestAnswerDetail[]
 }
