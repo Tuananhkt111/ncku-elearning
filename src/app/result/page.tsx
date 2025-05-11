@@ -24,6 +24,8 @@ import {
 } from '@chakra-ui/react'
 import { useSessionStore } from '@/lib/stores/sessionStore'
 import { UserID } from '@/components/UserID'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useUserStore } from '@/lib/stores/userStore'
 
 interface ResultData {
   scores: boolean[][]
@@ -34,14 +36,36 @@ interface ResultData {
 
 export default function ResultPage() {
   const router = useRouter()
-  const { getAllScores, getTotalScore, sessionDurations, timeLeftPerSession } = useSessionStore()
+  const { getAllScores } = useSessionStore()
+  const { userId } = useUserStore()
   const [resultData, setResultData] = useState<ResultData | null>(null)
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
     const loadResults = async () => {
       const scores = await getAllScores()
       
-      if (!scores || scores.length === 0) {
+      if (!scores || scores.length === 0 || !userId) {
+        router.push('/')
+        return
+      }
+
+      // Get time data from user_test_answer table
+      const { data: testAnswers } = await supabase
+        .from('user_test_answer')
+        .select(`
+          *,
+          user_test_answer_detail (
+            id,
+            question_id,
+            answer,
+            is_correct
+          )
+        `)
+        .eq('user_id', userId)
+        .order('session_id', { ascending: true })
+
+      if (!testAnswers) {
         router.push('/')
         return
       }
@@ -49,15 +73,9 @@ export default function ResultPage() {
       // Calculate total questions per session
       const totalQuestions = scores.map(sessionScores => sessionScores.length)
       
-      // Calculate actual time taken for each session
-      const sessionTimes = sessionDurations.map((duration: number, index: number) => {
-        const initialTimeInSeconds = duration * 60 // Convert minutes to seconds
-        const timeLeft = timeLeftPerSession[index] || 0
-        return initialTimeInSeconds - timeLeft // Time spent = initial time - time left
-      })
-
-      // Calculate total time from all sessions
-      const totalTime = sessionTimes.reduce((sum: number, time: number) => sum + time, 0)
+      // Get time data from database (in seconds)
+      const sessionTimes = testAnswers.map(answer => answer.total_time)
+      const totalTime = sessionTimes.reduce((sum, time) => sum + time, 0)
 
       setResultData({
         scores,
@@ -67,7 +85,7 @@ export default function ResultPage() {
       })
     }
     loadResults()
-  }, [getAllScores, getTotalScore, sessionDurations, timeLeftPerSession, router])
+  }, [getAllScores, router, userId, supabase])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)

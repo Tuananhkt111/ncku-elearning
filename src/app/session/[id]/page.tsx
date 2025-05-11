@@ -22,12 +22,16 @@ import { useQuestionStore, Question } from '@/lib/stores/questionStore'
 import { Session } from '@/types'
 import { getSession } from '@/lib/api'
 import { UserID } from '@/components/UserID'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useUserStore } from '@/lib/stores/userStore'
 
 export default function SessionPage() {
   const params = useParams()
   const router = useRouter()
   const toast = useToast()
   const { isOpen, onOpen, onClose } = useDisclosure()
+  const supabase = createClientComponentClient()
+  const { userId } = useUserStore()
   
   const sessionId = Number(params.id)
   const [timeLeft, setTimeLeft] = useState(7 * 60) // Default 7 minutes
@@ -43,6 +47,10 @@ export default function SessionPage() {
   const hasInitializedTimer = useRef(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const [popupBg, setPopupBg] = useState<string | undefined>(undefined)
+  const sessionStartTime = useRef<number | null>(null)
+  const hasStartedTimer = useRef(false)
+  const elapsedTime = useRef<number>(0)
+  const lastTickTime = useRef<number | null>(null)
   
   const { addAnswers, setTimeLeft: setStoreTimeLeft, setSessionDuration } = useSessionStore()
   const questionStore = useQuestionStore()
@@ -50,11 +58,50 @@ export default function SessionPage() {
   // Handle submitting all answers
   const handleSubmitAll = useCallback(async (isAutoSubmit = false) => {
     try {
-      if (!sessionData) return
+      if (!sessionData || !userId) return
       
-      // Store final answers
-      const finalAnswers = answers
-      await addAnswers(sessionId, finalAnswers)
+      // Store total time in seconds
+      const totalTime = elapsedTime.current
+
+      // Store final answers in user_test_answer
+      const { data: userTestAnswer, error: answerError } = await supabase
+        .from('user_test_answer')
+        .insert({
+          user_id: userId,
+          session_id: sessionId,
+          total_time: totalTime
+        })
+        .select()
+        .single()
+
+      if (answerError) throw answerError
+
+      // Store answer details
+      const answerDetails = questions.map(question => {
+        const userAnswer = answers[question.id] || '';
+        const correctAnswer = question.correctAnswer;
+        console.log('Answer check:', {
+          questionId: question.id,
+          userAnswer,
+          correctAnswer,
+          isCorrect: userAnswer === correctAnswer
+        });
+        return {
+          user_test_answer_id: userTestAnswer.id,
+          question_id: question.id,
+          answer: userAnswer,
+          is_correct: userAnswer === correctAnswer
+        };
+      });
+
+      const { error: detailsError } = await supabase
+        .from('user_test_answer_detail')
+        .insert(answerDetails)
+
+      if (detailsError) throw detailsError
+      
+      // Add answers to session store
+      await addAnswers(sessionId, answers)
       
       // Add a toast message for auto-submit
       if (isAutoSubmit) {
@@ -79,7 +126,7 @@ export default function SessionPage() {
         isClosable: true,
       })
     }
-  }, [sessionId, answers, addAnswers, router, toast, sessionData])
+  }, [sessionId, answers, router, toast, sessionData, questions, userId, supabase, addAnswers])
 
   // Timer effect
   useEffect(() => {
@@ -94,7 +141,9 @@ export default function SessionPage() {
       error,
       sessionData: !!sessionData,
       timeLeft,
-      hasInitializedTimer: hasInitializedTimer.current
+      hasInitializedTimer: hasInitializedTimer.current,
+      hasStartedTimer: hasStartedTimer.current,
+      elapsedTime: elapsedTime.current
     })
     
     // Don't start timer if conditions aren't met
@@ -110,13 +159,30 @@ export default function SessionPage() {
       return
     }
 
+    // Only set session start time once when timer first starts
+    if (!hasStartedTimer.current) {
+      console.log('Setting initial session start time')
+      sessionStartTime.current = Date.now()
+      lastTickTime.current = Date.now()
+      hasStartedTimer.current = true
+      elapsedTime.current = 0
+    }
+
     console.log('Starting timer with initial timeLeft:', timeLeft)
     
     // Start new timer
     timerRef.current = setInterval(() => {
+      const now = Date.now()
+      if (lastTickTime.current) {
+        // Calculate actual elapsed time since last tick
+        const tickDelta = Math.floor((now - lastTickTime.current) / 1000)
+        elapsedTime.current += tickDelta
+      }
+      lastTickTime.current = now
+
       setTimeLeft(prev => {
         const newTimeLeft = Math.max(0, prev - 1)
-        console.log('Timer tick - new time left:', newTimeLeft)
+        console.log('Timer tick - new time left:', newTimeLeft, 'elapsed:', elapsedTime.current)
         
         // Store time left in session store
         setStoreTimeLeft(sessionId, newTimeLeft)
@@ -140,6 +206,13 @@ export default function SessionPage() {
         clearInterval(timerRef.current)
         timerRef.current = null
       }
+      // Update elapsed time on cleanup
+      if (lastTickTime.current) {
+        const now = Date.now()
+        const tickDelta = Math.floor((now - lastTickTime.current) / 1000)
+        elapsedTime.current += tickDelta
+        lastTickTime.current = now
+      }
     }
   }, [isLoading, error, sessionData, handleSubmitAll, sessionId, setStoreTimeLeft, timeLeft])
 
@@ -155,6 +228,12 @@ export default function SessionPage() {
         console.log('Starting to load session data for ID:', sessionId)
         setIsLoading(true)
         setError(null)
+
+        // Reset timer state when loading new session
+        hasStartedTimer.current = false
+        sessionStartTime.current = null
+        elapsedTime.current = 0
+        lastTickTime.current = null
 
         // Validate session ID
         if (isNaN(sessionId) || sessionId < 1 || sessionId > 3) {

@@ -105,6 +105,42 @@ An interactive learning platform that allows users to participate in a 3-part te
        (3, '', '', '', 0, 420, 300);      -- Immediate popup for 7 minutes with reminder at 5 minutes
      ```
 
+     -- User Test Answer table
+     create table user_test_answer (
+       id uuid default uuid_generate_v4() primary key,
+       user_id text not null references users(user_id),
+       session_id integer not null references sessions(id),
+       total_time_ms bigint not null,
+       created_at timestamp with time zone default timezone('utc'::text, now()) not null
+     );
+
+     -- User Test Answer Detail table
+     create table user_test_answer_detail (
+       id uuid default uuid_generate_v4() primary key,
+       user_test_answer_id uuid not null references user_test_answer(id) on delete cascade,
+       question_id uuid not null references questions(id),
+       answer text not null,
+       is_correct boolean not null,
+       created_at timestamp with time zone default timezone('utc'::text, now()) not null
+     );
+
+     -- Enable RLS
+     alter table user_test_answer enable row level security;
+     alter table user_test_answer_detail enable row level security;
+
+     -- Create policies
+     create policy "Enable read access for all users" on user_test_answer for
+         select using (true);
+
+     create policy "Enable insert access for all users" on user_test_answer for
+         insert with check (true);
+
+     create policy "Enable read access for all users" on user_test_answer_detail for
+         select using (true);
+
+     create policy "Enable insert access for all users" on user_test_answer_detail for
+         insert with check (true);
+
 5. Run the development server:
    ```
 

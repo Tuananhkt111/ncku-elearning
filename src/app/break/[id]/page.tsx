@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   Container,
@@ -20,6 +20,13 @@ import {
   Stack,
   Divider,
   useToast,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogOverlay,
+  useDisclosure,
 } from '@chakra-ui/react'
 import { useSessionStore } from '@/lib/stores/sessionStore'
 import { useQuestionStore } from '@/lib/stores/questionStore'
@@ -29,6 +36,24 @@ import type { Database } from '@/types/supabase'
 import type { EvaluationQuestion } from '@/types/evaluation'
 import { UserID } from '@/components/UserID'
 import { useUserStore } from '@/lib/stores/userStore'
+
+interface UserTestAnswerDetail {
+  id: string
+  user_test_answer_id: string
+  question_id: string
+  answer: string
+  is_correct: boolean
+  created_at: string
+}
+
+interface UserTestAnswer {
+  id: string
+  user_id: string
+  session_id: number
+  total_time_ms: number
+  created_at: string
+  user_test_answer_detail: UserTestAnswerDetail[]
+}
 
 export default function BreakPage() {
   const params = useParams()
@@ -44,6 +69,8 @@ export default function BreakPage() {
   const [hasAnswersSaved, setHasAnswersSaved] = useState(false)
   const [evaluationSetup, setEvaluationSetup] = useState<EvaluationQuestion | null>(null)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({})
+  const { isOpen, onOpen, onClose } = useDisclosure()
+  const cancelRef = useRef<HTMLButtonElement>(null)
   
   const { getSessionScores, setTimeLeft: setStoreTimeLeft } = useSessionStore()
   const { userId } = useUserStore()
@@ -68,9 +95,32 @@ export default function BreakPage() {
         const sessionQuestions = allQuestions.filter(q => q.sessionId === sessionId)
         setTotalQuestions(sessionQuestions.length)
 
-        // Get scores for this session
-        const scores = await getSessionScores(sessionId)
-        setSessionScores(scores)
+        // Get scores from both session store and database
+        const storeScores = await getSessionScores(sessionId)
+        
+        // Get scores from database
+        const { data: testAnswer } = await supabase
+          .from('user_test_answer')
+          .select(`
+            *,
+            user_test_answer_detail:user_test_answer_detail (
+              *
+            )
+          `)
+          .eq('session_id', sessionId)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single() as { data: UserTestAnswer | null }
+
+        if (testAnswer && testAnswer.user_test_answer_detail) {
+          // Use database scores if available
+          const dbScores = testAnswer.user_test_answer_detail.map(detail => detail.is_correct)
+          setSessionScores(dbScores)
+        } else {
+          // Fallback to store scores
+          setSessionScores(storeScores)
+        }
 
         // Fetch evaluation setup
         const { data: evaluationData, error: evaluationError } = await supabase
@@ -99,7 +149,7 @@ export default function BreakPage() {
       }
     }
     loadData()
-  }, [sessionId, questionStore, getSessionScores, hasStarted, supabase])
+  }, [sessionId, questionStore, getSessionScores, hasStarted, supabase, userId])
 
   useEffect(() => {
     if (timeLeft == 0) {
@@ -330,7 +380,7 @@ export default function BreakPage() {
               size="lg"
               w="full"
               mt={4}
-              onClick={handleDone}
+              onClick={onOpen}
               isLoading={isSaving}
               isDisabled={Object.keys(selectedAnswers).length !== evaluationSetup.evaluation_variables?.length}
             >
@@ -352,6 +402,33 @@ export default function BreakPage() {
           </Button>
         )}
       </VStack>
+
+      <AlertDialog
+        isOpen={isOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={onClose}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              End Session
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              Are you sure you want to end this evaluation session? This action cannot be undone.
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button ref={cancelRef} onClick={onClose}>
+                Cancel
+              </Button>
+              <Button colorScheme="green" onClick={handleDone} ml={3} isLoading={isSaving}>
+                Confirm
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </Container>
   )
 } 
