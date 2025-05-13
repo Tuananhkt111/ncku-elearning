@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { useQuestionStore, Question } from './questionStore'
+import { useQuestionStore } from './questionStore'
 
 interface SessionState {
   scores: boolean[][]  // Array of arrays, each inner array contains scores for one session
