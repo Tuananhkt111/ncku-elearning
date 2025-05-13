@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Box,
   Container,
@@ -29,7 +29,6 @@ import { Question as StoreQuestion, useQuestionStore } from '@/lib/stores/questi
 // Convert store question to UI question format
 const toUIQuestion = (q: StoreQuestion): UIQuestion => ({
   id: q.id,
-  session_id: q.sessionId,
   question: q.question,
   choices: q.choices,
   correct_answer: q.correctAnswer,
@@ -39,7 +38,6 @@ const toUIQuestion = (q: StoreQuestion): UIQuestion => ({
 // Convert UI question to store question format
 const toStoreQuestion = (q: Partial<UIQuestion>): Partial<StoreQuestion> => ({
   id: q.id,
-  sessionId: q.session_id,
   question: q.question,
   choices: q.choices,
   correctAnswer: q.correct_answer,
@@ -47,31 +45,36 @@ const toStoreQuestion = (q: Partial<UIQuestion>): Partial<StoreQuestion> => ({
 
 export default function AdminQuestionsPage() {
   const toast = useToast()
-  const questionStore = useQuestionStore()
-
+  const { questions: storeQuestions, isLoading: storeLoading, getQuestions, addQuestion, updateQuestion, deleteQuestion } = useQuestionStore()
+  
   const [questions, setQuestions] = useState<UIQuestion[]>([])
   const [currentQuestion, setCurrentQuestion] = useState<Partial<UIQuestion>>({
-    session_id: 1,
     question: '',
     choices: ['', '', '', ''],
     correct_answer: '',
   })
   const [isEditing, setIsEditing] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  const loadQuestions = useCallback(async () => {
-    const storeQuestions = await questionStore.getQuestions()
-    const uiQuestions = storeQuestions.map(toUIQuestion)
-    setQuestions(uiQuestions)
-  }, [questionStore])
 
   useEffect(() => {
     const init = async () => {
-      await loadQuestions()
-      setIsLoading(false)
+      try {
+        await getQuestions()
+      } catch (error) {
+        toast({
+          title: 'Error loading questions',
+          description: 'Please try again later',
+          status: 'error',
+          duration: 3000,
+        })
+      }
     }
     init()
-  }, [loadQuestions])
+  }, [getQuestions, toast])
+
+  // Update local questions when store questions change
+  useEffect(() => {
+    setQuestions(storeQuestions.map(toUIQuestion))
+  }, [storeQuestions])
 
   const handleSubmit = async () => {
     if (!currentQuestion.question || !currentQuestion.correct_answer) {
@@ -87,17 +90,19 @@ export default function AdminQuestionsPage() {
       const storeQuestion = toStoreQuestion(currentQuestion)
       
       if (isEditing && currentQuestion.id) {
-        await questionStore.updateQuestion(storeQuestion as StoreQuestion)
+        await updateQuestion(storeQuestion as StoreQuestion)
         toast({
           title: 'Question updated successfully',
           status: 'success',
           duration: 2000,
         })
       } else {
-        await questionStore.addQuestion({
+        const newQuestion = {
           ...storeQuestion,
           id: Date.now().toString(),
-        } as StoreQuestion)
+        } as StoreQuestion
+        
+        await addQuestion(newQuestion)
         toast({
           title: 'Question added successfully',
           status: 'success',
@@ -105,16 +110,14 @@ export default function AdminQuestionsPage() {
         })
       }
 
-      // Reset form and refresh questions
+      // Reset form
       setCurrentQuestion({
-        session_id: 1,
         question: '',
         choices: ['', '', '', ''],
         correct_answer: '',
       })
       setIsEditing(false)
-      await loadQuestions()
-    } catch {
+    } catch (error) {
       toast({
         title: 'Error saving question',
         description: 'Please try again',
@@ -131,14 +134,13 @@ export default function AdminQuestionsPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await questionStore.deleteQuestion(id)
-      await loadQuestions()
+      await deleteQuestion(id)
       toast({
         title: 'Question deleted successfully',
         status: 'success',
         duration: 2000,
       })
-    } catch {
+    } catch (error) {
       toast({
         title: 'Error deleting question',
         description: 'Please try again',
@@ -154,7 +156,7 @@ export default function AdminQuestionsPage() {
     setCurrentQuestion({ ...currentQuestion, choices: newChoices })
   }
 
-  if (isLoading) {
+  if (storeLoading) {
     return (
       <Container centerContent py={10}>
         <Spinner size="xl" />
@@ -168,19 +170,6 @@ export default function AdminQuestionsPage() {
       <Container maxW="container.lg" py={10}>
         <VStack spacing={8} align="stretch">
           <Heading size="md">{isEditing ? 'Edit Question' : 'Add New Question'}</Heading>
-
-          <FormControl isRequired>
-            <FormLabel>Session</FormLabel>
-            <Select
-              value={currentQuestion.session_id}
-              onChange={(e) => setCurrentQuestion({ ...currentQuestion, session_id: Number(e.target.value) })}
-            >
-              <option value={1}>Session 1</option>
-              <option value={2}>Session 2</option>
-              <option value={3}>Session 3</option>
-              <option value={4}>Session 4</option>
-            </Select>
-          </FormControl>
 
           <FormControl isRequired>
             <FormLabel>Question</FormLabel>
@@ -230,7 +219,6 @@ export default function AdminQuestionsPage() {
           <Table variant="simple">
             <Thead>
               <Tr>
-                <Th>Session</Th>
                 <Th>Question</Th>
                 <Th>Choices</Th>
                 <Th>Correct Answer</Th>
@@ -240,7 +228,6 @@ export default function AdminQuestionsPage() {
             <Tbody>
               {questions.map((q: UIQuestion) => (
                 <Tr key={q.id}>
-                  <Td>Session {q.session_id}</Td>
                   <Td>{q.question}</Td>
                   <Td>{q.choices.join(', ')}</Td>
                   <Td>{q.correct_answer}</Td>

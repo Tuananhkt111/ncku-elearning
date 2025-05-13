@@ -3,7 +3,6 @@ import { supabase } from '../supabase'
 
 export interface Question {
   id: string
-  sessionId: number
   question: string
   choices: string[]
   correctAnswer: string
@@ -11,98 +10,150 @@ export interface Question {
 
 interface QuestionState {
   questions: Question[]
+  isLoading: boolean
+  hasInitialized: boolean
   addQuestion: (question: Question) => Promise<void>
   getQuestions: () => Promise<Question[]>
   updateQuestion: (question: Question) => Promise<void>
   deleteQuestion: (id: string) => Promise<void>
-  getCurrentQuestion: (sessionId: number) => Promise<Question | undefined>
   fetchQuestions: () => Promise<void>
 }
 
 export const useQuestionStore = create<QuestionState>()((set, get) => ({
   questions: [],
+  isLoading: false,
+  hasInitialized: false,
 
   fetchQuestions: async () => {
-    const { data, error } = await supabase
-      .from('questions')
-      .select('*')
-      .order('session_id', { ascending: true })
-
-    if (error) {
-      console.error('Error fetching questions:', error)
-      return
+    // If already loading, wait for the current fetch
+    if (get().isLoading) {
+      return;
     }
 
-    // Transform from snake_case to camelCase
-    const questions = data.map(q => ({
-      id: q.id,
-      sessionId: q.session_id,
-      question: q.question,
-      choices: q.choices,
-      correctAnswer: q.correct_answer,
-    }))
+    // If already initialized and has data, no need to fetch again
+    if (get().hasInitialized && get().questions.length > 0) {
+      return;
+    }
 
-    set({ questions })
+    try {
+      set({ isLoading: true });
+      const { data, error } = await supabase
+        .from('questions')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Transform from snake_case to camelCase
+      const questions = data.map(q => ({
+        id: q.id,
+        question: q.question,
+        choices: q.choices,
+        correctAnswer: q.correct_answer,
+      }));
+
+      set({ questions, hasInitialized: true });
+    } catch (error) {
+      console.error('Error fetching questions:', error);
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
   },
 
   addQuestion: async (question: Question) => {
-    const { error } = await supabase
-      .from('questions')
-      .insert([{
-        session_id: question.sessionId,
-        question: question.question,
-        choices: question.choices,
-        correct_answer: question.correctAnswer,
-      }])
+    try {
+      set({ isLoading: true });
+      const { data, error } = await supabase
+        .from('questions')
+        .insert([{
+          question: question.question,
+          choices: question.choices,
+          correct_answer: question.correctAnswer,
+        }])
+        .select();
 
-    if (error) {
-      console.error('Error adding question:', error)
-      return
+      if (error) throw error;
+
+      // Update local state immediately with the new question
+      const newQuestion = {
+        id: data[0].id,
+        question: data[0].question,
+        choices: data[0].choices,
+        correctAnswer: data[0].correct_answer,
+      };
+      
+      set(state => ({
+        questions: [newQuestion, ...state.questions]
+      }));
+    } catch (error) {
+      console.error('Error adding question:', error);
+      throw error;
+    } finally {
+      set({ isLoading: false });
     }
-
-    await get().fetchQuestions()
   },
 
   getQuestions: async () => {
-    await get().fetchQuestions()
-    return get().questions
+    if (!get().hasInitialized) {
+      await get().fetchQuestions();
+    }
+    return get().questions;
   },
 
   updateQuestion: async (question: Question) => {
-    const { error } = await supabase
-      .from('questions')
-      .update({
-        session_id: question.sessionId,
-        question: question.question,
-        choices: question.choices,
-        correct_answer: question.correctAnswer,
-      })
-      .eq('id', question.id)
+    try {
+      set({ isLoading: true });
+      const { data, error } = await supabase
+        .from('questions')
+        .update({
+          question: question.question,
+          choices: question.choices,
+          correct_answer: question.correctAnswer,
+        })
+        .eq('id', question.id)
+        .select();
 
-    if (error) {
-      console.error('Error updating question:', error)
-      return
+      if (error) throw error;
+
+      // Update the question in local state immediately
+      set(state => ({
+        questions: state.questions.map(q => 
+          q.id === question.id ? {
+            id: data[0].id,
+            question: data[0].question,
+            choices: data[0].choices,
+            correctAnswer: data[0].correct_answer,
+          } : q
+        )
+      }));
+    } catch (error) {
+      console.error('Error updating question:', error);
+      throw error;
+    } finally {
+      set({ isLoading: false });
     }
-
-    await get().fetchQuestions()
   },
 
   deleteQuestion: async (id: string) => {
-    const { error } = await supabase
-      .from('questions')
-      .delete()
-      .eq('id', id)
+    try {
+      set({ isLoading: true });
+      const { error } = await supabase
+        .from('questions')
+        .delete()
+        .eq('id', id);
 
-    if (error) {
-      console.error('Error deleting question:', error)
-      return
+      if (error) throw error;
+
+      // Remove the question from local state immediately
+      set(state => ({
+        questions: state.questions.filter(q => q.id !== id)
+      }));
+    } catch (error) {
+      console.error('Error deleting question:', error);
+      throw error;
+    } finally {
+      set({ isLoading: false });
     }
-
-    await get().fetchQuestions()
   },
-
-  getCurrentQuestion: async (sessionId: number) => {
-    await get().fetchQuestions()
-    return get().questions.find(q => q.sessionId === sessionId)
-  },
-})) 
+})); 

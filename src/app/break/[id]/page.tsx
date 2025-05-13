@@ -64,7 +64,7 @@ export default function BreakPage() {
   const [timeLeft, setTimeLeft] = useState(-1)
   const [hasStarted, setHasStarted] = useState(false)
   const [evaluationMinutes, setEvaluationMinutes] = useState(0)
-  const [sessionScores, setSessionScores] = useState<boolean[]>([])
+  const [sessionScores, setSessionScores] = useState<UserTestAnswerDetail[]>([])
   const [totalQuestions, setTotalQuestions] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -92,16 +92,13 @@ export default function BreakPage() {
           setTimeLeft(sessionData.evaluation_minutes * 60) // Convert minutes to seconds
           setHasStarted(true)
           setSessionName(sessionData.name || `Session ${sessionId}`)
+          
+          // Set total questions from session data
+          const totalQuestionsCount = sessionData.question_sets?.reduce((acc, set) => 
+            acc + (set.questions?.length || 0), 0) || 0
+          setTotalQuestions(totalQuestionsCount)
         }
 
-        // Get all questions for this session
-        const allQuestions = await questionStore.getQuestions()
-        const sessionQuestions = allQuestions.filter(q => q.sessionId === sessionId)
-        setTotalQuestions(sessionQuestions.length)
-
-        // Get scores from both session store and database
-        const storeScores = await getSessionScores(sessionId)
-        
         // Get scores from database
         const { data: testAnswer } = await supabase
           .from('user_test_answer')
@@ -118,12 +115,7 @@ export default function BreakPage() {
           .single() as { data: UserTestAnswer | null }
 
         if (testAnswer && testAnswer.user_test_answer_detail) {
-          // Use database scores if available
-          const dbScores = testAnswer.user_test_answer_detail.map(detail => detail.is_correct)
-          setSessionScores(dbScores)
-        } else {
-          // Fallback to store scores
-          setSessionScores(storeScores)
+          setSessionScores(testAnswer.user_test_answer_detail)
         }
 
         // Fetch evaluation setup
@@ -252,7 +244,8 @@ export default function BreakPage() {
   }
 
   // Calculate correct answers for this session
-  const correctAnswers = sessionScores.filter(Boolean).length
+  const correctAnswers = sessionScores.filter(detail => detail.is_correct).length
+  const answeredQuestions = sessionScores.length
 
   const progress = timeLeft > 0 ? (timeLeft / (evaluationMinutes * 60)) * 100 : 0
 
@@ -281,7 +274,7 @@ export default function BreakPage() {
           </Stat>
           <Stat>
             <StatLabel>Questions Completed</StatLabel>
-            <StatNumber>{totalQuestions}/{totalQuestions}</StatNumber>
+            <StatNumber>{answeredQuestions}/{totalQuestions}</StatNumber>
           </Stat>
         </StatGroup>
 

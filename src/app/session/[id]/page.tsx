@@ -1,28 +1,24 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   Box,
   Container,
   VStack,
   Text,
-  Radio,
-  RadioGroup,
   Button,
   useToast,
   Spinner,
-  Progress,
   HStack,
-  Image,
 } from '@chakra-ui/react'
 import { useSessionStore } from '@/lib/stores/sessionStore'
-import { useQuestionStore, Question } from '@/lib/stores/questionStore'
 import { Session } from '@/types'
 import { getSession } from '@/lib/api'
-import { UserID } from '@/components/UserID'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useUserStore } from '@/lib/stores/userStore'
+import { SplitSessionView } from '@/components/SplitSessionView'
+import { SessionHeader } from '@/components/SessionHeader'
 
 export default function SessionPage() {
   const params = useParams()
@@ -38,7 +34,6 @@ export default function SessionPage() {
     isLoading: boolean;
     error: string | null;
     sessionData: Session | null;
-    questions: Question[];
   }
 
   interface UserInteractionState {
@@ -52,14 +47,14 @@ export default function SessionPage() {
     popupTimers: Record<number, NodeJS.Timeout>;
     autoCloseTimers: Record<number, NodeJS.Timeout>;
     manuallyClosedPopups: Set<number>;
+    shownPopups: Set<number>;
   }
 
   const [sessionState, setSessionState] = useState<SessionState>({
     timeLeft: 7 * 60,
     isLoading: true,
     error: null,
-    sessionData: null,
-    questions: []
+    sessionData: null
   })
 
   const [userInteraction, setUserInteraction] = useState<UserInteractionState>({
@@ -72,7 +67,8 @@ export default function SessionPage() {
     activePopups: {},
     popupTimers: {},
     autoCloseTimers: {},
-    manuallyClosedPopups: new Set<number>()
+    manuallyClosedPopups: new Set<number>(),
+    shownPopups: new Set<number>()
   })
 
   const hasInitializedTimer = useRef<boolean>(false)
@@ -84,9 +80,8 @@ export default function SessionPage() {
   const totalDuration = useRef<number>(420)
 
   const { addAnswers, setTimeLeft: setStoreTimeLeft, setSessionDuration } = useSessionStore()
-  const questionStore = useQuestionStore()
 
-  const handleAnswerChange = useCallback((questionId: string, answer: string): void => {
+  const handleAnswerChange = useCallback((setId: number, questionId: string, answer: string): void => {
     setUserInteraction(prev => ({
       ...prev,
       answers: {
@@ -96,8 +91,58 @@ export default function SessionPage() {
     }))
   }, [])
 
-  const handlePopupResponse = useCallback((popupId: number): void => {
-    console.log('Handling popup response:', popupId)
+  const handlePopupResponse = useCallback(async (popupId: number, reaction: 'yes' | 'no'): Promise<void> => {
+    console.log('Handling popup response:', { popupId, reaction, userId, sessionId })
+    
+    try {
+      if (!userId) {
+        throw new Error('User ID not found')
+      }
+
+      // Save the reaction to the database
+      const { data, error: reactionError } = await supabase
+        .from('popup_reactions')
+        .insert({
+          user_id: userId,
+          session_id: sessionId,
+          popup_id: popupId,
+          reaction: reaction
+        })
+        .select()
+        .single()
+
+      if (reactionError) {
+        console.error('Error saving popup reaction:', {
+          error: reactionError,
+          details: {
+            userId,
+            sessionId,
+            popupId,
+            reaction
+          }
+        })
+        toast({
+          title: 'Error saving response',
+          description: reactionError.message || 'Your response could not be saved',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        })
+        return
+      }
+
+      console.log('Successfully saved popup reaction:', data)
+    } catch (error) {
+      console.error('Error in handlePopupResponse:', error)
+      toast({
+        title: 'Error saving response',
+        description: error instanceof Error ? error.message : 'Your response could not be saved',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
     
     setPopupState(prev => {
       const showTimer = prev.popupTimers[popupId]
@@ -125,12 +170,17 @@ export default function SessionPage() {
         manuallyClosedPopups: newManuallyClosedPopups
       }
     })
-  }, [])
+  }, [sessionId, userId, supabase, toast])
 
-  const progressStats = useMemo(() => ({
-    answeredCount: Object.keys(userInteraction.answers).length,
-    progressValue: (Object.keys(userInteraction.answers).length / sessionState.questions.length) * 100
-  }), [userInteraction.answers, sessionState.questions.length])
+  const handlePopupAutoClose = useCallback((popupId: number): void => {
+    setPopupState(prev => ({
+      ...prev,
+      activePopups: {
+        ...prev.activePopups,
+        [popupId]: false
+      }
+    }))
+  }, [])
 
   const handleSubmitAll = useCallback(async (isAutoSubmit = false): Promise<void> => {
     try {
@@ -140,6 +190,28 @@ export default function SessionPage() {
       if (sessionStartTime.current) {
         const rawElapsed = (Date.now() - sessionStartTime.current) / 1000
         finalTime = Math.min(Math.floor(rawElapsed), totalDuration.current)
+      }
+
+      // Save 'no_answer' reactions for popups that were shown but not responded to
+      const unansweredPopups = Array.from(popupState.shownPopups).filter(
+        popupId => !popupState.manuallyClosedPopups.has(popupId)
+      )
+      
+      if (unansweredPopups.length > 0) {
+        const noAnswerReactions = unansweredPopups.map(popupId => ({
+          user_id: userId,
+          session_id: sessionId,
+          popup_id: popupId,
+          reaction: 'no_answer'
+        }))
+
+        const { error: noAnswerError } = await supabase
+          .from('popup_reactions')
+          .insert(noAnswerReactions)
+
+        if (noAnswerError) {
+          console.error('Error saving no_answer reactions:', noAnswerError)
+        }
       }
 
       const { data: userTestAnswer, error: answerError } = await supabase
@@ -154,22 +226,24 @@ export default function SessionPage() {
 
       if (answerError) throw answerError
 
-      const answerDetails = sessionState.questions.map(question => {
-        const userAnswer = userInteraction.answers[question.id] || ''
-        const correctAnswer = question.correctAnswer
-        console.log('Answer check:', {
-          questionId: question.id,
-          userAnswer,
-          correctAnswer,
-          isCorrect: userAnswer === correctAnswer
-        })
-        return {
-          user_test_answer_id: userTestAnswer.id,
-          question_id: question.id,
-          answer: userAnswer,
-          is_correct: userAnswer === correctAnswer
-        }
-      })
+      const answerDetails = sessionState.sessionData.question_sets?.flatMap(set => 
+        set.questions?.map(question => {
+          const userAnswer = userInteraction.answers[question.id] || ''
+          const correctAnswer = question.correct_answer
+          console.log('Answer check:', {
+            questionId: question.id,
+            userAnswer,
+            correctAnswer,
+            isCorrect: userAnswer === correctAnswer
+          })
+          return {
+            user_test_answer_id: userTestAnswer.id,
+            question_id: question.id,
+            answer: userAnswer,
+            is_correct: userAnswer === correctAnswer
+          }
+        }) || []
+      ) || []
 
       const { error: detailsError } = await supabase
         .from('user_test_answer_detail')
@@ -200,15 +274,22 @@ export default function SessionPage() {
         isClosable: true,
       })
     }
-  }, [sessionId, userInteraction.answers, router, toast, sessionState.sessionData, sessionState.questions, userId, supabase, addAnswers])
+  }, [sessionId, userInteraction.answers, router, toast, sessionState.sessionData, userId, supabase, addAnswers])
 
   useEffect(() => {
+    // Clear existing timer if any
     if (timerRef.current) {
       clearInterval(timerRef.current)
       timerRef.current = null
     }
 
-    if (sessionState.isLoading || sessionState.error || !sessionState.sessionData || !hasInitializedTimer.current) {
+    // Don't start timer if we're still loading or have errors
+    if (!sessionState.sessionData || sessionState.error) {
+      return
+    }
+
+    // Don't proceed if timer hasn't been initialized yet
+    if (!hasInitializedTimer.current) {
       return
     }
 
@@ -217,6 +298,7 @@ export default function SessionPage() {
       return
     }
 
+    // Initialize timer if not started
     if (!hasStartedTimer.current) {
       sessionStartTime.current = Date.now()
       lastTickTime.current = Date.now()
@@ -263,7 +345,7 @@ export default function SessionPage() {
         elapsedTime.current = Math.min(Math.floor(rawElapsed), totalDuration.current)
       }
     }
-  }, [sessionState.isLoading, sessionState.error, sessionState.sessionData, handleSubmitAll])
+  }, [sessionState.sessionData, sessionState.error, handleSubmitAll])
 
   useEffect(() => {
     const loadData = async () => {
@@ -277,8 +359,7 @@ export default function SessionPage() {
         setSessionState(prev => ({
           ...prev,
           isLoading: true,
-          error: null,
-          questions: []
+          error: null
         }))
 
         hasStartedTimer.current = false
@@ -302,25 +383,22 @@ export default function SessionPage() {
           const durationInSeconds = session.duration_minutes * 60
           setSessionState(prev => ({
             ...prev,
+            isLoading: false,
             timeLeft: durationInSeconds,
             sessionData: session
           }))
           setStoreTimeLeft(sessionId, durationInSeconds)
           setSessionDuration(sessionId, session.duration_minutes)
           hasInitializedTimer.current = true
+        } else {
+          // Handle case where duration_minutes is not set
+          setSessionState(prev => ({
+            ...prev,
+            isLoading: false,
+            sessionData: session
+          }))
+          hasInitializedTimer.current = true
         }
-
-        const allQuestions = await questionStore.getQuestions()
-        const sessionQuestions = allQuestions.filter(q => q.sessionId === sessionId)
-        if (sessionQuestions.length === 0) {
-          throw new Error('No questions found for this session')
-        }
-        
-        setSessionState(prev => ({
-          ...prev,
-          questions: sessionQuestions,
-          isLoading: false
-        }))
       } catch (error) {
         console.error('Error loading session data:', error)
         setSessionState(prev => ({
@@ -339,7 +417,7 @@ export default function SessionPage() {
     }
 
     loadData()
-  }, [sessionId, questionStore, toast, setSessionDuration, setStoreTimeLeft])
+  }, [sessionId, toast, setSessionDuration, setStoreTimeLeft])
 
   useEffect(() => {
     if (!sessionState.sessionData || sessionState.isLoading || sessionState.error) {
@@ -355,7 +433,8 @@ export default function SessionPage() {
       activePopups: {},
       popupTimers: {},
       autoCloseTimers: {},
-      manuallyClosedPopups: prev.manuallyClosedPopups
+      manuallyClosedPopups: prev.manuallyClosedPopups,
+      shownPopups: prev.shownPopups
     }));
     
     Object.values(popupState.popupTimers).forEach(timer => clearTimeout(timer));
@@ -386,18 +465,13 @@ export default function SessionPage() {
             activePopups: {
               ...prev.activePopups,
               [popup.id]: true
-            }
+            },
+            shownPopups: new Set([...prev.shownPopups, popup.id])
           }));
 
           const remainingDuration = (popup.start_time + popup.duration) - elapsedSeconds;
           const autoCloseTimer = setTimeout(() => {
-            setPopupState(prev => ({
-              ...prev,
-              activePopups: {
-                ...prev.activePopups,
-                [popup.id]: false
-              }
-            }));
+            handlePopupAutoClose(popup.id);
           }, remainingDuration * 1000);
           
           newAutoCloseTimers[popup.id] = autoCloseTimer;
@@ -414,19 +488,14 @@ export default function SessionPage() {
               activePopups: {
                 ...prev.activePopups,
                 [popup.id]: true
-              }
+              },
+              shownPopups: new Set([...prev.shownPopups, popup.id])
             };
           });
 
           if (popup.duration) {
             const autoCloseTimer = setTimeout(() => {
-              setPopupState(prev => ({
-                ...prev,
-                activePopups: {
-                  ...prev.activePopups,
-                  [popup.id]: false
-                }
-              }));
+              handlePopupAutoClose(popup.id);
             }, popup.duration * 1000);
             
             newAutoCloseTimers[popup.id] = autoCloseTimer;
@@ -462,13 +531,7 @@ export default function SessionPage() {
         autoCloseTimers: {}
       }));
     };
-  }, [sessionState.sessionData, sessionState.isLoading, sessionState.error, sessionId, toast, sessionState.timeLeft]);
-
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
+  }, [sessionState.sessionData, sessionState.isLoading, sessionState.error, sessionId, toast, sessionState.timeLeft, handlePopupAutoClose]);
 
   if (sessionState.isLoading) {
     return (
@@ -481,114 +544,45 @@ export default function SessionPage() {
   if (sessionState.error) {
     return (
       <Container centerContent py={10}>
-        <VStack spacing={4}>
-          <Text color="red.500" fontSize="lg">{sessionState.error}</Text>
-          <Button onClick={() => router.push('/')} colorScheme="blue">
-            Return to Home
-          </Button>
-        </VStack>
+        <Text color="red.500" fontSize="lg">{sessionState.error}</Text>
+        <Button onClick={() => router.push('/')} colorScheme="blue">
+          Return to Home
+        </Button>
       </Container>
     )
   }
 
-  if (sessionState.questions.length === 0) {
+  if (!sessionState.sessionData?.question_sets || sessionState.sessionData.question_sets.length === 0) {
     return (
       <Container centerContent py={10}>
-        <VStack spacing={4}>
-          <Text>No questions available for this session.</Text>
-          <Button onClick={() => router.push('/')} colorScheme="blue">
-            Return to Home
-          </Button>
-        </VStack>
+        <Text>No questions available for this session.</Text>
+        <Button onClick={() => router.push('/')} colorScheme="blue">
+          Return to Home
+        </Button>
       </Container>
     )
   }
 
-  const { answeredCount, progressValue } = progressStats;
-
   return (
-    <Container maxW="container.md" py={10}>
-      <UserID />
-      <VStack spacing={6}>
-        <Box w="full">
-          <Text fontSize="xl" fontWeight="bold" mb={2}>
-          Session {sessionState.sessionData?.name || sessionId} - Time Remaining: {formatTime(sessionState.timeLeft)}
-          </Text>
-          {sessionState.sessionData?.description && (
-            <Box 
-              mb={4} 
-              borderRadius="lg" 
-              overflow="hidden" 
-              boxShadow="md"
-              bg="gray.50"
-              p={4}
-              display="flex"
-              justifyContent="center"
-              alignItems="center"
-            >
-              <Image
-                src={sessionState.sessionData.description}
-                alt={`Session ${sessionId}`}
-                maxH="700px"
-                maxW="100%"
-                objectFit="contain"
-                borderRadius="lg"
-                fallback={
-                  <Box
-                    w="full"
-                    h="700px"
-                    bg="gray.100"
-                    borderRadius="lg"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    <Text color="gray.500">No image available</Text>
-                  </Box>
-                }
-              />
-            </Box>
-          )}
-          <Progress value={progressValue} colorScheme="blue" hasStripe mb={4} />
-          <Text textAlign="right" color="gray.600">
-            {answeredCount} of {sessionState.questions.length} questions answered
-          </Text>
-        </Box>
-        
-        {sessionState.questions.map((question, index) => (
-          <Box key={question.id} w="full" p={6} borderWidth={1} borderRadius="lg">
-            <VStack align="start" spacing={4}>
-              <Text fontWeight="bold">
-                Question {index + 1}: {question.question}
-              </Text>
-              
-              <RadioGroup 
-                onChange={(value) => handleAnswerChange(question.id, value)} 
-                value={userInteraction.answers[question.id] || ''}
-              >
-                <VStack align="start" spacing={3}>
-                  {question.choices.map((choice: string, choiceIndex: number) => (
-                    <Radio key={choiceIndex} value={choice}>
-                      {choice}
-                    </Radio>
-                  ))}
-                </VStack>
-              </RadioGroup>
-            </VStack>
-          </Box>
-        ))}
+    <Box>
+      <SessionHeader 
+        sessionName={`Session ${sessionState.sessionData?.name || sessionId}`}
+        timeLeft={sessionState.timeLeft}
+        onSubmit={() => handleSubmitAll(false)}
+        isSubmitDisabled={!sessionState.sessionData?.question_sets?.every(set => 
+          set.questions?.every(q => userInteraction.answers[q.id])
+        )}
+      />
+      <Box pt="80px"> {/* Add padding to account for fixed header */}
+        <SplitSessionView
+          questionSets={sessionState.sessionData.question_sets}
+          timeLeft={sessionState.timeLeft}
+          onAnswerChange={handleAnswerChange}
+          answers={userInteraction.answers}
+          onSubmit={() => handleSubmitAll(false)}
+        />
 
-        <Button 
-          colorScheme="blue" 
-          size="lg" 
-          w="full" 
-          onClick={() => handleSubmitAll(false)}
-          isDisabled={Object.keys(userInteraction.answers).length !== sessionState.questions.length}
-        >
-          Submit All Answers
-        </Button>
-
-        {sessionState.sessionData?.popups?.map(popup => (
+        {sessionState.sessionData.popups?.map(popup => (
           popupState.activePopups[popup.id] && (
             <Box
               key={popup.id}
@@ -613,7 +607,7 @@ export default function SessionPage() {
                     colorScheme="blue" 
                     onClick={() => {
                       console.log('Yes clicked for popup:', popup.id);
-                      handlePopupResponse(popup.id);
+                      handlePopupResponse(popup.id, 'yes');
                     }}
                   >
                     Yes
@@ -623,7 +617,7 @@ export default function SessionPage() {
                     variant="ghost" 
                     onClick={() => {
                       console.log('No clicked for popup:', popup.id);
-                      handlePopupResponse(popup.id);
+                      handlePopupResponse(popup.id, 'no');
                     }}
                   >
                     No
@@ -633,7 +627,7 @@ export default function SessionPage() {
             </Box>
           )
         ))}
-      </VStack>
-    </Container>
+      </Box>
+    </Box>
   )
 }

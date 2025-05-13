@@ -39,25 +39,44 @@ An interactive learning platform that allows users to participate in a 3-part te
    - Create a new Supabase project
    - Create the following tables:
      ```sql
+     -- Questions Set table
+     create table questions_set (
+       id serial primary key,
+       image text not null,
+       set_name text not null,
+       created_at timestamp with time zone default timezone('utc'::text, now()) not null
+     );
+
+     -- Questions Set Link table
+     create table questions_set_link (
+       id uuid default uuid_generate_v4() primary key,
+       set_id integer not null references questions_set(id),
+       question_id uuid not null references questions(id),
+       created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+       unique(set_id, question_id)
+     );
+
+     -- Session Set Link table
+     create table session_set_link (
+       id uuid default uuid_generate_v4() primary key,
+       session_id integer not null references sessions(id),
+       set_id integer not null references questions_set(id),
+       created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+       unique(session_id, set_id)
+     );
+
      -- Sessions table
      create table sessions (
        id serial primary key,
-       description text not null default '',
        duration_minutes integer not null default 7,
        evaluation_minutes integer not null default 3,
-       popup_name text default '',
-       popup_description text default '',
-       popup_start_time integer, -- time in seconds from session start
-       popup_duration integer, -- duration in seconds
-       popup_remind_time integer, -- time in seconds when to show reminder, null for no reminder
        created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-       check (id between 1 and 3) -- Ensure id is between 1 and 3
+       check (id between 1 and 4)
      );
 
      -- Questions table
      create table questions (
        id uuid default uuid_generate_v4() primary key,
-       session_id integer not null references sessions(id),
        question text not null,
        choices text[] not null,
        correct_answer text not null,
@@ -91,18 +110,7 @@ An interactive learning platform that allows users to participate in a 3-part te
      );
 
      -- Insert default sessions
-     insert into sessions (
-       id,
-       description,
-       popup_name,
-       popup_description,
-       popup_start_time,
-       popup_duration,
-       popup_remind_time
-     ) values
-       (1, '', '', '', null, null, null), -- No popup session
-       (2, '', '', '', 120, 60, null),    -- Popup after 2 minutes for 1 minute
-       (3, '', '', '', 0, 420, 300);      -- Immediate popup for 7 minutes with reminder at 5 minutes
+     insert into sessions (id) values (1), (2), (3);
      ```
 
      -- User Test Answer table
@@ -110,7 +118,7 @@ An interactive learning platform that allows users to participate in a 3-part te
        id uuid default uuid_generate_v4() primary key,
        user_id text not null references users(user_id),
        session_id integer not null references sessions(id),
-       total_time_ms bigint not null,
+       total_time bigint not null,
        created_at timestamp with time zone default timezone('utc'::text, now()) not null
      );
 
@@ -199,3 +207,42 @@ create policy "Enable read access for all users" on evaluation_answer_details fo
 
 create policy "Enable insert access for all users" on evaluation_answer_details for
     insert with check (true);
+```
+
+#### popup_reactions
+Stores user reactions to popups during sessions.
+
+```sql
+create table popup_reactions (
+    id uuid default uuid_generate_v4() primary key,
+    user_id text not null references users(user_id),
+    session_id integer references sessions(id),
+    popup_id integer references popups(id),
+    reaction text check (reaction in ('yes', 'no', 'no_answer')),
+    created_at timestamp with time zone default timezone('utc'::text, now()),
+    constraint unique_user_popup unique (user_id, popup_id)
+);
+```
+
+-- Enable RLS
+alter table popup_reactions enable row level security;
+
+-- Create policies
+create policy "Enable read access for all users" on popup_reactions for
+    select using (true);
+
+create policy "Enable insert access for all users" on popup_reactions for
+    insert with check (true);
+
+create policy "Enable update access for users on their own reactions" on popup_reactions for
+    update using (auth.uid() = user_id);
+
+Fields:
+- `id`: Unique identifier for the reaction
+- `user_id`: Text identifier of the user who reacted
+- `session_id`: Reference to the session where the popup appeared
+- `popup_id`: ID of the popup that was shown
+- `reaction`: User's reaction ('yes', 'no', or 'no_answer')
+- `created_at`: Timestamp when the reaction was recorded
+
+The `unique_user_popup` constraint ensures each user can only have one reaction per popup.

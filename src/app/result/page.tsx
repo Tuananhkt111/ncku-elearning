@@ -5,21 +5,8 @@ import { useRouter } from 'next/navigation'
 import {
   Container,
   VStack,
-  Heading,
   Text,
   Button,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  TableContainer,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatGroup,
-  Box,
   Spinner,
 } from '@chakra-ui/react'
 import { useSessionStore } from '@/lib/stores/sessionStore'
@@ -97,11 +84,11 @@ export default function ResultPage() {
     loadResults()
   }, [getAllScores, router, userId, supabase])
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}m ${secs}s`
-  }
+  // const formatTime = (seconds: number) => {
+  //   const mins = Math.floor(seconds / 60)
+  //   const secs = seconds % 60
+  //   return `${mins}m ${secs}s`
+  // }
 
   if (!resultData) {
     return (
@@ -115,6 +102,7 @@ export default function ResultPage() {
     <Container maxW="container.md" py={10}>
       <UserID />
       <VStack spacing={8}>
+        {/* Temporarily hidden
         <Heading>Test Results</Heading>
 
         <StatGroup w="full">
@@ -158,6 +146,7 @@ export default function ResultPage() {
             </Table>
           </TableContainer>
         </Box>
+        */}
 
         <Text fontSize="lg" textAlign="center">
           Thank you for completing the test! Your results have been recorded.
