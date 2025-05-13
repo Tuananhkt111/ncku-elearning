@@ -134,7 +134,7 @@ export default function ResultPage() {
                 </Tr>
               </Thead>
               <Tbody>
-                {[1, 2, 3].map((sessionId) => (
+                {[1, 2, 3, 4].map((sessionId) => (
                   <Tr key={sessionId}>
                     <Td>Session {sessionId}</Td>
                     <Td>

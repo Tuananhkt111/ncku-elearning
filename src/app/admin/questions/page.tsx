@@ -178,6 +178,7 @@ export default function AdminQuestionsPage() {
               <option value={1}>Session 1</option>
               <option value={2}>Session 2</option>
               <option value={3}>Session 3</option>
+              <option value={4}>Session 4</option>
             </Select>
           </FormControl>
 

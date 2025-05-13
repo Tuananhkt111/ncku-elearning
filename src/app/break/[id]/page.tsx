@@ -335,7 +335,7 @@ export default function BreakPage() {
         )}
 
         <Text fontSize="lg" textAlign="center">
-          Take a moment to rest. Click Done when you're ready to continue.
+          Take a moment to rest. Click Done when you&apos;re ready to continue.
         </Text>
       </VStack>
 

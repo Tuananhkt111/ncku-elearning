@@ -286,7 +286,7 @@ export default function SessionPage() {
         elapsedTime.current = 0
         lastTickTime.current = null
 
-        if (isNaN(sessionId) || sessionId < 1 || sessionId > 3) {
+        if (isNaN(sessionId) || sessionId < 1 || sessionId > 4) {
           throw new Error('Invalid session ID')
         }
 

@@ -21,11 +21,11 @@ interface SessionState {
 export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
-      scores: [[], [], []], // Initialize with empty arrays for all 3 sessions
+      scores: [[], [], [], []], // Initialize with empty arrays for all 4 sessions
       startTime: null,
       endTime: null,
-      sessionDurations: [7, 7, 7], // Default 7 minutes per session
-      timeLeftPerSession: [420, 420, 420], // Default 7 minutes in seconds
+      sessionDurations: [7, 7, 7, 7], // Default 7 minutes per session, added session 4
+      timeLeftPerSession: [420, 420, 420, 420], // Default 7 minutes in seconds, added session 4
 
       setSessionDuration: (sessionId: number, duration: number) => {
         const currentState = get()
@@ -66,7 +66,7 @@ export const useSessionStore = create<SessionState>()(
           })
 
           const currentState = get()
-          const newScores = [...(currentState.scores ?? [[], [], []])]
+          const newScores = [...(currentState.scores ?? [[], [], [], []])]
           newScores[sessionId - 1] = sessionScores
 
           // Initialize start time if this is the first answer
@@ -75,7 +75,7 @@ export const useSessionStore = create<SessionState>()(
           }
 
           // Set end time if this is the last session
-          if (sessionId === 3) {
+          if (sessionId === 4) {
             set({ endTime: Date.now() })
           }
 
@@ -89,18 +89,18 @@ export const useSessionStore = create<SessionState>()(
 
       getSessionScores: (sessionId: number) => {
         const currentState = get()
-        const scores = currentState.scores ?? [[], [], []]
+        const scores = currentState.scores ?? [[], [], [], []]
         return scores[sessionId - 1] || []
       },
 
       getAllScores: () => {
         const currentState = get()
-        return currentState.scores ?? [[], [], []]
+        return currentState.scores ?? [[], [], [], []]
       },
 
       getTotalScore: () => {
         const currentState = get()
-        const scores = currentState.scores ?? [[], [], []]
+        const scores = currentState.scores ?? [[], [], [], []]
         const total = scores.flat().filter(Boolean).length
         console.log('Getting total score:', total)
         return total
@@ -113,19 +113,17 @@ export const useSessionStore = create<SessionState>()(
       },
 
       resetSession: () => {
-        console.log('Resetting session')
         set({
-          scores: [[], [], []], // Reset to initial state with empty arrays
+          scores: [[], [], [], []],
           startTime: null,
           endTime: null,
-          sessionDurations: [7, 7, 7],
-          timeLeftPerSession: [420, 420, 420],
+          sessionDurations: [7, 7, 7, 7],
+          timeLeftPerSession: [420, 420, 420, 420]
         })
-      },
+      }
     }),
     {
-      name: 'session-storage',
-      version: 1, // Add version to handle state migrations
+      name: 'session-storage'
     }
   )
 ) 

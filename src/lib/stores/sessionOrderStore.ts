@@ -8,10 +8,10 @@ interface SessionOrderState {
 }
 
 export const useSessionOrderStore = create<SessionOrderState>((set, get) => ({
-  sessionOrder: [1, 2, 3], // Default order
+  sessionOrder: [1, 2, 3, 4], // Added session 4
 
   generateRandomOrder: () => {
-    const order = [1, 2, 3]
+    const order = [1, 2, 3, 4] // Added session 4
     // Fisher-Yates shuffle algorithm
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -33,6 +33,6 @@ export const useSessionOrderStore = create<SessionOrderState>((set, get) => ({
   },
 
   resetOrder: () => {
-    set({ sessionOrder: [1, 2, 3] })
+    set({ sessionOrder: [1, 2, 3, 4] }) // Added session 4
   }
 })) 

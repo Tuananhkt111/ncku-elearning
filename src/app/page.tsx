@@ -58,7 +58,7 @@ export default function Home() {
       <VStack spacing={8} align="center">
         <Heading size="2xl">NCKU E-Learning Platform</Heading>
         <Text fontSize="lg" textAlign="center">
-          Welcome to the interactive learning platform. This test consists of 3 sessions,
+          Welcome to the interactive learning platform. This test consists of 4 sessions,
           each with specific tasks and evaluations.
         </Text>
         <Box>
