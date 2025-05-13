@@ -512,7 +512,7 @@ export default function SessionPage() {
       <VStack spacing={6}>
         <Box w="full">
           <Text fontSize="xl" fontWeight="bold" mb={2}>
-            Session {sessionId} - Time Remaining: {formatTime(sessionState.timeLeft)}
+          Session {sessionState.sessionData?.name || sessionId} - Time Remaining: {formatTime(sessionState.timeLeft)}
           </Text>
           {sessionState.sessionData?.description && (
             <Box 

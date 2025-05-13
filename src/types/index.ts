@@ -10,6 +10,7 @@ export interface Popup {
 
 export interface Session {
   id: number;
+  name: string;
   description: string;
   duration_minutes: number;
   evaluation_minutes: number;

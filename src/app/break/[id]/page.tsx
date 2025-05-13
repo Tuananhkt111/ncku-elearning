@@ -71,6 +71,7 @@ export default function BreakPage() {
   const [hasAnswersSaved, setHasAnswersSaved] = useState(false)
   const [evaluationSetup, setEvaluationSetup] = useState<EvaluationQuestion | null>(null)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({})
+  const [sessionName, setSessionName] = useState<string>('')
   const { isOpen, onOpen, onClose } = useDisclosure()
   const cancelRef = useRef<HTMLButtonElement>(null)
   
@@ -90,6 +91,7 @@ export default function BreakPage() {
           setEvaluationMinutes(sessionData.evaluation_minutes)
           setTimeLeft(sessionData.evaluation_minutes * 60) // Convert minutes to seconds
           setHasStarted(true)
+          setSessionName(sessionData.name || `Session ${sessionId}`)
         }
 
         // Get all questions for this session
@@ -258,7 +260,7 @@ export default function BreakPage() {
     <Container maxW="container.md" py={10}>
       <UserID />
       <VStack spacing={8}>
-        <Heading>Session {sessionId} Complete!</Heading>
+        <Heading>Session {sessionName} Complete!</Heading>
         
         <Box w="full">
           <Text mb={2}>Break Time Remaining</Text>

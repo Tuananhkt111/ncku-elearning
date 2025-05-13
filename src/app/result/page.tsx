@@ -32,6 +32,7 @@ interface ResultData {
   totalQuestions: number[]
   sessionTimes: number[]
   totalTime: number
+  sessionNames: string[]
 }
 
 export default function ResultPage() {
@@ -49,6 +50,14 @@ export default function ResultPage() {
         router.push('/')
         return
       }
+
+      // Get session names from sessions table
+      const { data: sessions } = await supabase
+        .from('sessions')
+        .select('id, name')
+        .order('id')
+
+      const sessionNames = sessions?.map(session => session.name || `Session ${session.id}`) || []
 
       // Get time data from user_test_answer table
       const { data: testAnswers } = await supabase
@@ -81,7 +90,8 @@ export default function ResultPage() {
         scores,
         totalQuestions,
         sessionTimes,
-        totalTime
+        totalTime,
+        sessionNames
       })
     }
     loadResults()
@@ -136,7 +146,7 @@ export default function ResultPage() {
               <Tbody>
                 {[1, 2, 3, 4].map((sessionId) => (
                   <Tr key={sessionId}>
-                    <Td>Session {sessionId}</Td>
+                    <Td>{resultData.sessionNames[sessionId - 1]}</Td>
                     <Td>
                       {resultData.scores[sessionId - 1].filter(Boolean).length}/
                       {resultData.totalQuestions[sessionId - 1]}

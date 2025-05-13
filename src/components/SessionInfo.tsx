@@ -17,7 +17,7 @@ export function SessionInfo({ session }: SessionInfoProps) {
   return (
     <Box p={6} borderWidth="1px" borderRadius="lg">
       <VStack align="start" spacing={4}>
-        <Heading size="md">Session {session.id}</Heading>
+        <Heading size="md">{session.name || `Session ${session.id}`}</Heading>
         <Text>{session.description}</Text>
         
         <Box>

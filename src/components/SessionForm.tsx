@@ -27,6 +27,7 @@ interface SessionFormProps {
 
 export function SessionForm({ initialData, onSubmit, isLoading }: SessionFormProps) {
   const [formData, setFormData] = useState({
+    name: initialData?.name || '',
     description: initialData?.description || '',
     duration_minutes: initialData?.duration_minutes || 7,
     evaluation_minutes: initialData?.evaluation_minutes || 3,
@@ -87,6 +88,15 @@ export function SessionForm({ initialData, onSubmit, isLoading }: SessionFormPro
   return (
     <form onSubmit={handleSubmit}>
       <VStack spacing={4} align="stretch">
+        <FormControl>
+          <FormLabel>Session Name</FormLabel>
+          <Input
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            placeholder="Enter session name"
+          />
+        </FormControl>
+
         <FormControl isRequired>
           <FormLabel>Description</FormLabel>
           <Textarea
