@@ -30,6 +30,7 @@ import {
 } from '@chakra-ui/react'
 import { useSessionStore } from '@/lib/stores/sessionStore'
 import { useQuestionStore } from '@/lib/stores/questionStore'
+import { useSessionOrderStore } from '@/lib/stores/sessionOrderStore'
 import { getSession } from '@/lib/api'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
@@ -59,6 +60,7 @@ export default function BreakPage() {
   const params = useParams()
   const router = useRouter()
   const sessionId = Number(params.id)
+  const { getNextSession } = useSessionOrderStore()
   const [timeLeft, setTimeLeft] = useState(-1)
   const [hasStarted, setHasStarted] = useState(false)
   const [evaluationMinutes, setEvaluationMinutes] = useState(0)
@@ -212,13 +214,16 @@ export default function BreakPage() {
       await Promise.all(detailPromises)
       setHasAnswersSaved(true)
 
-      // Stop timer and navigate
+      // Stop timer and get next session
       setTimeLeft(0)
       setStoreTimeLeft(sessionId, 0)
 
-      // Navigate to next session or results
-      if (sessionId < 3) {
-        router.push(`/session/${sessionId + 1}`)
+      // Get next session from random order
+      const nextSession = getNextSession(sessionId)
+
+      // Navigate to next session or results based on session order
+      if (nextSession) {
+        router.push(`/session/${nextSession}`)
       } else {
         router.push('/result')
       }
@@ -330,17 +335,8 @@ export default function BreakPage() {
         )}
 
         <Text fontSize="lg" textAlign="center">
-          Take a moment to rest. The next session will start automatically.
+          Take a moment to rest. Click Done when you're ready to continue.
         </Text>
-
-        {sessionId === 3 && timeLeft === 0 && (
-          <Button
-            colorScheme="blue"
-            onClick={() => router.push('/result')}
-          >
-            View Final Results
-          </Button>
-        )}
       </VStack>
 
       <AlertDialog

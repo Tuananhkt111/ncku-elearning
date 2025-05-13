@@ -3,12 +3,14 @@
 import { Box, Button, Container, Heading, Text, VStack } from '@chakra-ui/react'
 import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/lib/stores/userStore'
+import { useSessionOrderStore } from '@/lib/stores/sessionOrderStore'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useState } from 'react'
 
 export default function Home() {
   const router = useRouter()
   const { setUserId } = useUserStore()
+  const { generateRandomOrder, getNextSession } = useSessionOrderStore()
   const [isLoading, setIsLoading] = useState(false)
   const supabase = createClientComponentClient()
 
@@ -36,8 +38,14 @@ export default function Home() {
       // Store user ID in local state
       setUserId(newUserId)
 
+      // Generate random session order
+      generateRandomOrder()
+
+      // Get first session from random order
+      const firstSession = getNextSession(null)
+
       // Navigate to first session
-      router.push('/session/1')
+      router.push(`/session/${firstSession}`)
     } catch (error) {
       console.error('Error starting test:', error)
     } finally {
