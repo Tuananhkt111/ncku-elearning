@@ -188,7 +188,10 @@ export default function BreakPage() {
 
   const handleDone = async () => {
     try {
-      if (hasAnswersSaved) return
+      if (hasAnswersSaved) {
+        console.log('Answers already saved, preventing duplicate submission');
+        return;
+      }
       setIsSaving(true)
 
       if (!userId) {
@@ -353,7 +356,7 @@ export default function BreakPage() {
               mt={4}
               onClick={onOpen}
               isLoading={isSaving}
-              isDisabled={Object.keys(selectedAnswers).length !== evaluationSetup.evaluation_variables?.length}
+              isDisabled={Object.keys(selectedAnswers).length !== evaluationSetup.evaluation_variables?.length || hasAnswersSaved}
             >
               Done
             </Button>
@@ -384,7 +387,13 @@ export default function BreakPage() {
               <Button ref={cancelRef} onClick={onClose}>
                 Cancel
               </Button>
-              <Button colorScheme="green" onClick={handleDone} ml={3} isLoading={isSaving}>
+              <Button 
+                colorScheme="green" 
+                onClick={handleDone} 
+                ml={3} 
+                isLoading={isSaving}
+                isDisabled={hasAnswersSaved}
+              >
                 Confirm
               </Button>
             </AlertDialogFooter>

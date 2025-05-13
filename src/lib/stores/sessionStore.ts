@@ -44,13 +44,7 @@ export const useSessionStore = create<SessionState>()(
       addAnswers: async (sessionId: number, answers: Record<string, string>) => {
         try {
           const { getQuestions } = useQuestionStore.getState()
-          const questions = await getQuestions()
-          const sessionQuestions = questions.filter((q: Question) => q.sessionId === sessionId)
-          
-          if (sessionQuestions.length === 0) {
-            console.error('No questions found for session:', sessionId)
-            return
-          }
+          const sessionQuestions = await getQuestions()
 
           console.log('Session questions:', sessionQuestions)
           console.log('Submitted answers:', answers)
