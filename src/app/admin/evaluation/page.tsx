@@ -65,7 +65,18 @@ export default function EvaluationSetup() {
 
       if (questionsError) throw questionsError;
 
-      setQuestions(questionsData || []);
+      // Sort suggested answers by order_number
+      const sortedQuestionsData = questionsData?.map(question => ({
+        ...question,
+        evaluation_variables: question.evaluation_variables?.map((variable: EvaluationVariable) => ({
+          ...variable,
+          evaluation_suggested_answers: variable.evaluation_suggested_answers?.sort(
+            (a: EvaluationSuggestedAnswer, b: EvaluationSuggestedAnswer) => a.order_number - b.order_number
+          )
+        }))
+      }));
+
+      setQuestions(sortedQuestionsData || []);
     } catch (error) {
       console.error('Error fetching questions:', error);
       toast({

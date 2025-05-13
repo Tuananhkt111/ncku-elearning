@@ -153,67 +153,7 @@ export default function BreakPage() {
 
   useEffect(() => {
     if (timeLeft == 0) {
-      const saveAndNavigate = async () => {
-        try {
-          if (hasAnswersSaved) {
-            // If answers were already saved by clicking Done, just navigate
-            if (sessionId < 3) {
-              router.push(`/session/${sessionId + 1}`)
-            } else {
-              router.push('/result')
-            }
-            return
-          }
-
-          if (!userId) {
-            throw new Error('User ID not found')
-          }
-
-          // Create evaluation answer record for timeout
-          const { data: evaluationAnswer, error: evaluationError } = await supabase
-            .from('evaluation_answers')
-            .insert({
-              user_id: userId,
-              session_id: sessionId,
-              completion_type: 'timeout'
-            })
-            .select()
-            .single()
-
-          if (evaluationError || !evaluationAnswer) {
-            throw evaluationError || new Error('Failed to create evaluation answer')
-          }
-
-          // Create evaluation answer details
-          const detailPromises = Object.entries(selectedAnswers).map(([variableId, answerId]) => {
-            return supabase
-              .from('evaluation_answer_details')
-              .insert({
-                evaluation_answer_id: evaluationAnswer.id,
-                evaluation_variable_id: variableId,
-                evaluation_suggested_answer_id: answerId
-              })
-          })
-
-          await Promise.all(detailPromises)
-          setHasAnswersSaved(true)
-        } catch (error) {
-          console.error('Error saving timeout evaluation answers:', error)
-        }
-
-        // Update store before navigation
-        setStoreTimeLeft(sessionId, 0)
-        
-        // Navigate to next session when timer ends
-        if (sessionId < 3) {
-          router.push(`/session/${sessionId + 1}`)
-        } else {
-          router.push('/result')
-        }
-      }
-
-      saveAndNavigate()
-      return
+      return // Do nothing when timer hits zero
     }
 
     const timer = setInterval(() => {
@@ -226,7 +166,7 @@ export default function BreakPage() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [timeLeft, sessionId, router, setStoreTimeLeft, userId, supabase, selectedAnswers, hasAnswersSaved])
+  }, [timeLeft, sessionId, setStoreTimeLeft])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
