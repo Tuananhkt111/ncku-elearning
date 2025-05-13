@@ -27,6 +27,8 @@ import {
   AlertDialogContent,
   AlertDialogOverlay,
   useDisclosure,
+  Alert,
+  AlertIcon,
 } from '@chakra-ui/react'
 import { useSessionStore } from '@/lib/stores/sessionStore'
 import { useQuestionStore } from '@/lib/stores/questionStore'
@@ -74,6 +76,7 @@ export default function BreakPage() {
   const [sessionName, setSessionName] = useState<string>('')
   const { isOpen, onOpen, onClose } = useDisclosure()
   const cancelRef = useRef<HTMLButtonElement>(null)
+  const [isTimeOut, setIsTimeOut] = useState(false)
   
   const { getSessionScores, setTimeLeft: setStoreTimeLeft } = useSessionStore()
   const { userId } = useUserStore()
@@ -149,7 +152,20 @@ export default function BreakPage() {
 
   useEffect(() => {
     if (timeLeft == 0) {
-      return // Do nothing when timer hits zero
+      setIsTimeOut(true)
+      if (evaluationSetup?.evaluation_variables) {
+        const unansweredCount = evaluationSetup.evaluation_variables.length - Object.keys(selectedAnswers).length;
+        if (unansweredCount > 0) {
+          toast({
+            title: 'Time is up!',
+            description: `You have ${unansweredCount} unanswered question${unansweredCount > 1 ? 's' : ''}. Please complete all questions.`,
+            status: 'warning',
+            duration: null,
+            isClosable: true,
+          });
+        }
+      }
+      return
     }
 
     const timer = setInterval(() => {
@@ -284,12 +300,27 @@ export default function BreakPage() {
           <VStack spacing={6} align="stretch" w="full">
             <Heading size="md">Evaluation Setup</Heading>
             
+            {isTimeOut && evaluationSetup.evaluation_variables && 
+              evaluationSetup.evaluation_variables.length > Object.keys(selectedAnswers).length && (
+              <Alert status="warning">
+                <AlertIcon />
+                Please complete all remaining questions highlighted in red.
+              </Alert>
+            )}
+
             <Text fontSize="lg" fontWeight="medium">
               {evaluationSetup.description}
             </Text>
 
             {evaluationSetup.evaluation_variables?.map((variable) => (
-              <Box key={variable.id} p={4} borderWidth={1} borderRadius="md">
+              <Box 
+                key={variable.id} 
+                p={4} 
+                borderWidth={1} 
+                borderRadius="md"
+                bg={isTimeOut && !selectedAnswers[variable.id] ? 'red.50' : 'white'}
+                borderColor={isTimeOut && !selectedAnswers[variable.id] ? 'red.300' : 'inherit'}
+              >
                 <Text fontSize="md" fontWeight="bold" mb={3}>
                   {variable.variable_name}
                 </Text>

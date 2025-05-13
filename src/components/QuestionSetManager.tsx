@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   Box,
   Button,
@@ -47,6 +47,7 @@ export function QuestionSetManager({
   const [isLoading, setIsLoading] = useState(false);
   const [setToDelete, setSetToDelete] = useState<QuestionsSet | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const cancelRef = useRef<HTMLButtonElement>(null);
 
   const handleImageUpload = useCallback(async (setId: number, file: File) => {
     try {
@@ -358,7 +359,7 @@ export function QuestionSetManager({
 
       <AlertDialog
         isOpen={isOpen}
-        leastDestructiveRef={undefined}
+        leastDestructiveRef={cancelRef}
         onClose={onClose}
       >
         <AlertDialogOverlay>
@@ -372,7 +373,7 @@ export function QuestionSetManager({
             </AlertDialogBody>
 
             <AlertDialogFooter>
-              <Button onClick={onClose}>
+              <Button ref={cancelRef} onClick={onClose}>
                 Cancel
               </Button>
               <Button
