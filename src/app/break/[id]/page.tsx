@@ -15,9 +15,7 @@ import {
   StatNumber,
   StatGroup,
   Spinner,
-  Radio,
   RadioGroup,
-  Stack,
   Divider,
   useToast,
   AlertDialog,
@@ -29,6 +27,9 @@ import {
   useDisclosure,
   Alert,
   AlertIcon,
+  HStack,
+  Circle,
+  Flex,
 } from '@chakra-ui/react'
 import { useSessionStore } from '@/lib/stores/sessionStore'
 import { useQuestionStore } from '@/lib/stores/questionStore'
@@ -335,16 +336,50 @@ export default function BreakPage() {
                     [variable.id]: value
                   }))}
                 >
-                  <Stack>
-                    {variable.evaluation_suggested_answers
-                      ?.sort((a, b) => a.order_number - b.order_number)
-                      .map((answer) => (
-                        <Radio key={answer.id} value={answer.id}>
-                          {answer.answer_text}
-                        </Radio>
-                      ))
-                    }
-                  </Stack>
+                  <Flex position="relative" w="full" justify="center" align="center" py={4}>
+                    <HStack spacing={0} w="95%" justify="space-between" position="relative">
+                      {variable.evaluation_suggested_answers
+                        ?.sort((a, b) => a.order_number - b.order_number)
+                        .map((answer) => {
+                          const isSelected = selectedAnswers[variable.id] === answer.id;
+                          return (
+                            <Box key={answer.id} textAlign="center" flex="1">
+                              <Circle
+                                size="24px"
+                                bg={isSelected ? "green.500" : "white"}
+                                border="1.5px solid"
+                                borderColor={isSelected ? "green.500" : "gray.200"}
+                                cursor="pointer"
+                                onClick={() => {
+                                  setSelectedAnswers(prev => ({
+                                    ...prev,
+                                    [variable.id]: answer.id
+                                  }))
+                                }}
+                                transition="all 0.2s"
+                                _hover={{
+                                  borderColor: "green.500",
+                                  transform: "scale(1.1)"
+                                }}
+                                mx="auto"
+                              />
+                              <Text
+                                mt={1}
+                                fontSize="md"
+                                fontWeight="700"
+                                color={isSelected ? "green.500" : "gray.600"}
+                                maxW="50px"
+                                textAlign="center"
+                                mx="auto"
+                                noOfLines={2}
+                              >
+                                {answer.answer_text}
+                              </Text>
+                            </Box>
+                          );
+                        })}
+                    </HStack>
+                  </Flex>
                 </RadioGroup>
               </Box>
             ))}
