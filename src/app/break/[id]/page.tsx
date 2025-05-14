@@ -132,14 +132,19 @@ export default function BreakPage() {
               evaluation_suggested_answers:evaluation_suggested_answers (*)
             )
           `)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
+          .order('created_at', { ascending: true })
 
         if (evaluationError) {
           console.error('Error fetching evaluation setup:', evaluationError)
         } else {
-          setEvaluationSetup(evaluationData)
+          // Sort evaluation variables by created_at before setting the state
+          const sortedData = evaluationData.map(question => ({
+            ...question,
+            evaluation_variables: question.evaluation_variables?.sort((a: { created_at: string }, b: { created_at: string }) => 
+              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            )
+          }))
+          setEvaluationSetup(sortedData[0])
         }
 
         setIsLoading(false)
