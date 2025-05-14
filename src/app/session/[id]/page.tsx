@@ -19,6 +19,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useUserStore } from '@/lib/stores/userStore'
 import { SplitSessionView } from '@/components/SplitSessionView'
 import { SessionHeader } from '@/components/SessionHeader'
+import { playNotificationSound } from '@/lib/utils/audio'
 
 export default function SessionPage() {
   const params = useParams()
@@ -48,6 +49,7 @@ export default function SessionPage() {
     autoCloseTimers: Record<number, NodeJS.Timeout>;
     manuallyClosedPopups: Set<number>;
     shownPopups: Set<number>;
+    soundPlayedPopups: Set<number>;
   }
 
   const [sessionState, setSessionState] = useState<SessionState>({
@@ -68,7 +70,8 @@ export default function SessionPage() {
     popupTimers: {},
     autoCloseTimers: {},
     manuallyClosedPopups: new Set<number>(),
-    shownPopups: new Set<number>()
+    shownPopups: new Set<number>(),
+    soundPlayedPopups: new Set<number>()
   })
 
   const hasInitializedTimer = useRef<boolean>(false)
@@ -434,7 +437,8 @@ export default function SessionPage() {
       popupTimers: {},
       autoCloseTimers: {},
       manuallyClosedPopups: prev.manuallyClosedPopups,
-      shownPopups: prev.shownPopups
+      shownPopups: prev.shownPopups,
+      soundPlayedPopups: prev.soundPlayedPopups
     }));
     
     Object.values(popupState.popupTimers).forEach(timer => clearTimeout(timer));
@@ -460,13 +464,18 @@ export default function SessionPage() {
 
         if (popup.start_time <= elapsedSeconds && 
             popup.start_time + popup.duration > elapsedSeconds) {
+          // Play notification sound for immediate popups only if not played before
+          if (!popupState.soundPlayedPopups.has(popup.id)) {
+            playNotificationSound();
+          }
           setPopupState(prev => ({
             ...prev,
             activePopups: {
               ...prev.activePopups,
               [popup.id]: true
             },
-            shownPopups: new Set([...prev.shownPopups, popup.id])
+            shownPopups: new Set([...prev.shownPopups, popup.id]),
+            soundPlayedPopups: new Set([...prev.soundPlayedPopups, popup.id])
           }));
 
           const remainingDuration = (popup.start_time + popup.duration) - elapsedSeconds;
@@ -483,13 +492,18 @@ export default function SessionPage() {
             if (prev.manuallyClosedPopups.has(popup.id)) {
               return prev;
             }
+            // Play notification sound only if not played before
+            if (!prev.soundPlayedPopups.has(popup.id)) {
+              playNotificationSound();
+            }
             return {
               ...prev,
               activePopups: {
                 ...prev.activePopups,
                 [popup.id]: true
               },
-              shownPopups: new Set([...prev.shownPopups, popup.id])
+              shownPopups: new Set([...prev.shownPopups, popup.id]),
+              soundPlayedPopups: new Set([...prev.soundPlayedPopups, popup.id])
             };
           });
 
@@ -528,7 +542,10 @@ export default function SessionPage() {
         ...prev,
         activePopups: {},
         popupTimers: {},
-        autoCloseTimers: {}
+        autoCloseTimers: {},
+        manuallyClosedPopups: prev.manuallyClosedPopups,
+        shownPopups: prev.shownPopups,
+        soundPlayedPopups: prev.soundPlayedPopups
       }));
     };
   }, [sessionState.sessionData, sessionState.isLoading, sessionState.error, sessionId, toast, sessionState.timeLeft, handlePopupAutoClose]);
@@ -599,7 +616,7 @@ export default function SessionPage() {
               id={`popup-${popup.id}`}
             >
               <VStack align="stretch" spacing={3}>
-                <Text fontWeight="bold">{popup.name || 'Question'}</Text>
+                <Text fontWeight="bold" fontSize="2xl">{popup.name || 'Question'}</Text>
                 <Text>{popup.description || 'Do you want to hang out with me?'}</Text>
                 <HStack justifyContent="flex-end" spacing={2}>
                   <Button 
